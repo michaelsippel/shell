@@ -1,0 +1,18 @@
+[package]
+name = "shell"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+r3vi = { git = "https://git.exobiont.de/senvas/r3vi.git" }
+#nested = { git = "https://git.exobiont.de/senvas/nested.git" }
+nested = { path = "../nested/nested" }
+cgmath = "*"
+termion = "1.5.5"
+bincode = "*"
+libc = "0.2.*"
+portable-pty = "0.4.0"
+
+[dependencies.async-std]
+version = "1.9.0"
+features = ["unstable", "attributes"]
