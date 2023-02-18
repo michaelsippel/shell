@@ -1,18 +1,29 @@
 use {
     crate::pty::{PTYStatus, PTY},
+    r3vi::{
+        view::{
+            OuterViewPort, ViewPort,
+            singleton::*,
+            sequence::*,
+        },
+        projection::{
+            filter_sequence::*,
+            map_sequence::*
+        }
+    },
     nested::{
-        core::{OuterViewPort, ViewPort},
-        list::{ListCursorMode, PTYListEditor},
-        sequence::{SequenceView, SequenceViewExt, decorator::{SeqDecorStyle, Separate, Wrap}},
-        singleton::SingletonView,
-        char_editor::CharEditor,
+        editors::{
+            list::{ListCursorMode, PTYListEditor},
+            char::CharEditor,  
+        },
         terminal::{
             TerminalAtom, TerminalEditor, TerminalEditorResult, TerminalEvent, TerminalStyle,
             TerminalView,
+            widgets::ascii_box::AsciiBox
         },
-        tree::{TreeCursor, TreeNav, TreeNavResult},
+        tree::{TreeCursor, TreeNav, TreeNavResult, NestedNode},
         diagnostics::Diagnostics,
-        Nested
+        type_system::{Context}
     },
     std::sync::Arc,
     std::sync::RwLock,
@@ -22,68 +33,10 @@ use {
 
 //<<<<>>>><<>><><<>><<<*>>><<>><><<>><<<<>>>>
 
-pub struct ProcessArg {
-    editor:
-        PTYListEditor<CharEditor>,
-}
-
-impl ProcessArg {
-    pub fn get_data_port(&self) -> OuterViewPort<dyn SequenceView<Item = char>> {
-        self.editor.get_data_port().map(|char_editor| {
-            char_editor
-                .read()
-                .unwrap()
-                .get_port()
-                .get_view()
-                .unwrap()
-                .get()
-                .unwrap()
-        })
-    }
-}
-
-impl TerminalEditor for ProcessArg {
-    fn get_term_view(&self) -> OuterViewPort<dyn TerminalView> {
-        self.editor.get_term_view()
-    }
-
-    fn handle_terminal_event(&mut self, event: &TerminalEvent) -> TerminalEditorResult {
-        match event {
-            TerminalEvent::Input(Event::Key(Key::Char(' ')))
-            | TerminalEvent::Input(Event::Key(Key::Char('\n'))) => {
-                self.editor.up();
-                TerminalEditorResult::Exit
-            }
-
-            event => self.editor.handle_terminal_event(event),
-        }
-    }
-}
-
-impl TreeNav for ProcessArg {
-    fn get_cursor(&self) -> TreeCursor {
-        self.editor.get_cursor()
-    }
-    fn get_cursor_warp(&self) -> TreeCursor {
-        self.editor.get_cursor_warp()
-    }
-    fn goto(&mut self, cur: TreeCursor) -> TreeNavResult {
-        self.editor.goto(cur)
-    }
-    fn goby(&mut self, dir: Vector2<isize>) -> TreeNavResult {
-        self.editor.goby(dir)
-    }
-}
-
-impl Diagnostics for ProcessArg {    
-}
-
-impl Nested for ProcessArg {}
-
 pub struct ProcessLauncher {
-    cmd_editor: PTYListEditor<ProcessArg>,
+    cmd_editor: NestedNode,
     pty: Option<crate::pty::PTY>,
-    _ptybox: Arc<RwLock<crate::ascii_box::AsciiBox>>,
+    _ptybox: Arc<RwLock<AsciiBox>>,
     suspended: bool,
 
     pty_port: ViewPort<dyn TerminalView>,
@@ -94,28 +47,14 @@ pub struct ProcessLauncher {
 }
 
 impl ProcessLauncher {
-    pub fn new() -> Self {
+    pub fn new(
+        cmd_editor: NestedNode
+    ) -> Self {
         let pty_port = ViewPort::new();
         let status_port = ViewPort::new();
         let comp_port = ViewPort::new();
         let box_port = ViewPort::<dyn TerminalView>::new();
         let compositor = nested::terminal::TerminalCompositor::new(comp_port.inner());
-
-        let cmd_editor = PTYListEditor::new(
-            Box::new(|| {
-                Arc::new(RwLock::new(ProcessArg {
-                    editor: PTYListEditor::new(
-                        Box::new(|| Arc::new(RwLock::new(CharEditor::new()))),
-                        SeqDecorStyle::Plain,
-                        '\n',
-                        1
-                    ),
-                }))
-            }) as Box<dyn Fn() -> Arc<RwLock<ProcessArg>> + Send + Sync>,
-            SeqDecorStyle::HorizontalSexpr,
-            ' ',
-            0
-        );
 
         compositor.write().unwrap().push(
             box_port
@@ -123,13 +62,13 @@ impl ProcessLauncher {
                 .map_item(|_idx, x| x.add_style_back(TerminalStyle::fg_color((90, 120, 100)))),
         );
         compositor.write().unwrap().push(
-            cmd_editor.get_term_view()
+            cmd_editor.view.clone().unwrap()
         );
 
         ProcessLauncher {
             cmd_editor,
             pty: None,
-            _ptybox: crate::ascii_box::AsciiBox::new(
+            _ptybox: AsciiBox::new(
                 cgmath::Vector2::new(0, 0),
                 pty_port.outer().map_item(|_, a: &TerminalAtom| {
                     a.add_style_back(TerminalStyle::fg_color((230, 230, 230)))
@@ -145,19 +84,58 @@ impl ProcessLauncher {
     }
 
     pub fn launch_pty(&mut self) {
-        let mut strings = Vec::new();
+        let ctx = self.cmd_editor.ctx.clone().unwrap();
+        let ctx = ctx.read().unwrap();
 
-        let v = self.cmd_editor.get_data_port().get_view().unwrap();
-        for i in 0..v.len().unwrap_or(0) {
-            let arg_view = v
-                .get(&i)
+        let mut strings = Vec::<String>::new();
+
+        if let Some(data) = self.cmd_editor.data.clone() {
+            let v = data.read().unwrap()
+                .descend(
+                    &ctx.type_term_from_str("( List ProcessArg )").unwrap()
+                )
                 .unwrap()
-                .read()
-                .unwrap()
-                .get_data_port()
-                .get_view()
-                .unwrap();
-            strings.push(arg_view.iter().collect::<String>());
+                .read().unwrap()
+                .get_view::<dyn SequenceView<Item = NestedNode>>();
+
+            for i in 0..v.len().unwrap_or(0) {
+                if let Some(arg_data) = v
+                    .get(&i)
+                    .unwrap()
+                    .data
+                    .clone()
+                {
+                    let arg_view = arg_data
+                        .read()
+                        .unwrap()
+                        .descend(
+                            &ctx.type_term_from_str("( List Char )").unwrap()
+                        )
+                        .unwrap()
+                        .read().unwrap()
+                        .get_view::<dyn SequenceView<Item = NestedNode>>()
+                        .unwrap();
+
+                    let arg = arg_view.iter().filter_map(
+                            |node| {
+                                if let Some(c_data) = node.data.clone() {
+                                    if let Some(c_view) = c_data
+                                        .read().unwrap()
+                                        .get_view::<dyn SingletonView<Item = Option<char>>>()
+                                    {
+                                        c_view.get()
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            }
+                    ).collect::<String>();
+
+                    strings.push(arg);
+                }
+            }            
         }
 
         if strings.len() > 0 {
@@ -183,95 +161,95 @@ impl ProcessLauncher {
     pub fn is_captured(&self) -> bool {
         self.pty.is_some() && !self.suspended
     }
-}
 
-impl TerminalEditor for ProcessLauncher {
-    fn get_term_view(&self) -> OuterViewPort<dyn TerminalView> {
+    pub fn pty_view(&self) -> OuterViewPort<dyn TerminalView> {
         self.comp_port.outer()
     }
+}
 
-    fn handle_terminal_event(&mut self, event: &TerminalEvent) -> TerminalEditorResult {
+
+use nested::type_system::ReprTree;
+use nested::commander::ObjCommander;
+
+impl ObjCommander for ProcessLauncher {
+    fn send_cmd_obj(&mut self, cmd_obj: Arc<RwLock<ReprTree>>) {
+
         // todo: move to observer of status view
         if let PTYStatus::Done { status: _ } = self.status_port.outer().get_view().get() {
             self.pty = None;
             self.suspended = false;
         }
 
-        match event {
-            TerminalEvent::Input(Event::Key(Key::Ctrl('c'))) => {
-                // todo: sigterm instead of kill?
-                if let Some(pty) = self.pty.as_mut() {
-                    pty.kill();
-                }
 
-                self.pty = None;
-                self.suspended = false;
-                self.cmd_editor.goto(TreeCursor {
-                    leaf_mode: ListCursorMode::Insert,
-                    tree_addr: vec![],
-                });
-                TerminalEditorResult::Exit
-            }
-            TerminalEvent::Input(Event::Key(Key::Ctrl('z'))) => {
-                self.suspended = true;
-                self.cmd_editor.goto(TreeCursor {
-                    leaf_mode: ListCursorMode::Insert,
-                    tree_addr: vec![],
-                });
-                TerminalEditorResult::Exit
-            }
-            event => {
-                if let Some(pty) = self.pty.as_mut() {
-                    pty.handle_terminal_event(event);
-                    TerminalEditorResult::Continue
-                } else {
-                    match event {
-                        TerminalEvent::Input(Event::Key(Key::Char('\n'))) => {
-                            // launch command
-                            self.launch_pty();
-                            TerminalEditorResult::Continue
+        let ctx = self.cmd_editor.ctx.clone().unwrap();
+        let ctx = ctx.read().unwrap();
+
+        let co = cmd_obj.read().unwrap();
+        let cmd_type = co.get_type().clone();
+        let term_event_type = ctx.type_term_from_str("( TerminalEvent )").unwrap();
+        let char_type = ctx.type_term_from_str("( Char )").unwrap();
+
+        if cmd_type == term_event_type {
+            if let Some(te_view) = co.get_view::<dyn SingletonView<Item = TerminalEvent>>() {
+                drop(co);
+                let event = te_view.get();
+                
+                match event {
+                    TerminalEvent::Input(Event::Key(Key::Ctrl('c'))) => {
+                        // todo: sigterm instead of kill?
+                        if let Some(pty) = self.pty.as_mut() {
+                            pty.kill();
                         }
-                        event => self.cmd_editor.handle_terminal_event(event),
+
+                        self.pty = None;
+                        self.suspended = false;
+                        self.cmd_editor.goto(TreeCursor {
+                            leaf_mode: ListCursorMode::Insert,
+                            tree_addr: vec![],
+                        });
+                    }
+                    TerminalEvent::Input(Event::Key(Key::Ctrl('z'))) => {
+                        self.suspended = true;
+                        self.cmd_editor.goto(TreeCursor {
+                            leaf_mode: ListCursorMode::Insert,
+                            tree_addr: vec![],
+                        });
+                    }
+                    event => {
+                        if let Some(pty) = self.pty.as_mut() {
+                            pty.handle_terminal_event(&event);
+                        } else {
+                            match event {
+                                TerminalEvent::Input(Event::Key(Key::Char('\n'))) => {
+                                    // launch command
+                                    self.launch_pty();
+                                }
+                                event => self.cmd_editor.send_cmd_obj(cmd_obj),
+                            }
+                        }
                     }
                 }
             }
-        }
-    }
-}
+        } else if cmd_type == char_type {
 
-impl TreeNav for ProcessLauncher {
-    fn get_cursor(&self) -> TreeCursor {
-        self.cmd_editor.get_cursor()
-    }
-    fn get_cursor_warp(&self) -> TreeCursor {
-        self.cmd_editor.get_cursor_warp()
-    }
-
-    fn goto(&mut self, cur: TreeCursor) -> TreeNavResult {
-        self.suspended = false;
-        if let PTYStatus::Done { status: _ } = self.status_port.outer().get_view().get() {
-            self.pty = None;
-        }
-
-        if self.pty.is_none() {
-            self.cmd_editor.goto(cur)
+            if let Some(cmd_view) = co.get_view::<dyn SingletonView<Item = char>>() {
+                drop(co);
+                let c = cmd_view.get();
+                
+                if c == '\n' {
+                    self.launch_pty();
+                } else {
+                    self.cmd_editor.send_cmd_obj(cmd_obj);
+                }
+                
+            } else {
+                drop(co);
+                self.cmd_editor.send_cmd_obj(cmd_obj);
+            }
         } else {
-            self.cmd_editor.goto(TreeCursor {
-                leaf_mode: ListCursorMode::Select,
-                tree_addr: vec![],
-            });
-            TreeNavResult::Continue
+            drop(co);
+            self.cmd_editor.send_cmd_obj(cmd_obj);
         }
     }
-
-    fn goby(&mut self, dir: Vector2<isize>) -> TreeNavResult {
-        self.cmd_editor.goby(dir)
-    }
-
 }
-
-impl Diagnostics for ProcessLauncher {
-}
-
-impl Nested for ProcessLauncher {}
 

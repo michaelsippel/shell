@@ -3,16 +3,18 @@ extern crate r3vi;
 
 mod pty;
 mod incubator;
+mod morphisms;
 
 // TODO rewrite process & command with incubator rules
-//mod process;
+mod process;
+mod pipeline;
 //mod command;
 
 use {
     cgmath::{Point2, Vector2},
     r3vi::{
         view::{
-            port::UpdateTask, Observer, ViewPort,
+            port::UpdateTask, Observer, ViewPort, AnyOuterViewPort,
             index::*,
         },
         buffer::{
@@ -27,7 +29,7 @@ use {
     nested::{
         type_system::{Context, ReprTree},
         editors::{
-            list::{ListCursorMode, PTYListEditor, ListStyle},
+            list::{ListCursorMode, PTYListEditor},
             integer::{PosIntEditor},
             sum::*
         },
@@ -38,7 +40,7 @@ use {
         },
         tree::{TreeNav, TreeCursor, TreeNavResult},
         diagnostics::{Diagnostics},
-        commander::Commander
+        commander::ObjCommander
     },
     std::sync::{Arc, RwLock},
     termion::event::{Event, Key},
@@ -78,36 +80,15 @@ async fn main() {
     let ctx = nested::type_system::init_mem_ctx(ctx);
     let ctx = nested::type_system::init_editor_ctx(ctx);
     let ctx = nested::type_system::init_math_ctx(ctx);
-    let ctx = nested::type_system::init_os_ctx(ctx);
+    let ctx = crate::morphisms::init_os_ctx(ctx);
 
-/*
-    let vb = VecBuffer::<char>::new();
-    let rt_charvec = ReprTree::new_leaf(
-        typeterm!(ctx, "( Vec Char )"),
-        AnyOuterViewPort::from(vb.get_port())
-    );
-
-    let rt_typeid = ReprTree::ascend(&rt_char, typeterm!(ctx, "( Typeid )"));
-    rt_typename.write().unwrap().insert_branch(
-        ReprTree::new_leaf(
-            typeterm!(ctx, "( MachineInt )"),
-            AnyOuterViewPort::from(
-                vb.get_port().to_sequence().map(
-                    |c: &char| {
-                        c.to_digit(10).unwrap()
-                    }
-                )
-            )
-        )
-    );
-*/
     let c = ctx.clone();
 
     let mut process_list_editor =
         PTYListEditor::new(
             ctx.clone(),
-            c.read().unwrap().type_term_from_str("( TypeTerm )").unwrap(),
-            ListStyle::VerticalSexpr,
+            c.read().unwrap().type_term_from_str("( Pipeline )").unwrap(),
+            None,
             0
         );
 
@@ -136,7 +117,6 @@ async fn main() {
             (Point2::new(0, 1), cursor_widget),
             (Point2::new(0, 2), magic.clone()),
             (Point2::new(0, 3), make_label(" ")),
-            (Point2::new(0, 4), node.view.clone().unwrap()),
             (Point2::new(0, 4),
              ple_seg_view
              .enumerate()
@@ -291,14 +271,19 @@ async fn main() {
                     node.qnexd();
                 }
                 TerminalEvent::Input(Event::Key(Key::Char('\t'))) => {
-                    let mut c = node.get_cursor();
-                    c.leaf_mode = match c.leaf_mode {
-                        ListCursorMode::Select => ListCursorMode::Insert,
-                        ListCursorMode::Insert => ListCursorMode::Select
-                    };
-                    node.goto(c);
+                    node.toggle_leaf_mode();
                 }
-                ev => {
+                TerminalEvent::Input(Event::Key(Key::Char(c))) => {
+                    let buf = SingletonBuffer::new(c);
+
+                    node.send_cmd_obj(
+                        ReprTree::new_leaf(
+                            ctx.read().unwrap().type_term_from_str("( Char )").unwrap(),
+                            AnyOuterViewPort::from(buf.get_port())
+                        )
+                    );
+                }
+                ev => {                    
                     node.handle_terminal_event(&ev);
                 }
             }
