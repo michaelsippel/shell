@@ -1,12 +1,10 @@
 use {
     nested::{
-        type_system::{Context, TypeTerm, ReprTree},
+        type_system::{Context, TypeTerm},
         editors::{
-            char::*,
             list::*
         },
-        tree::{NestedNode},
-        type_system::{TypeTermEditor, MorphismTypePattern},
+        type_system::{MorphismTypePattern},
     },
     std::sync::{Arc, RwLock},
 };
@@ -21,7 +19,7 @@ pub fn init_os_ctx(parent: Arc<RwLock<Context>>) -> Arc<RwLock<Context>> {
     };
     ctx.write().unwrap().add_morphism(pattern,
         Arc::new(
-            |mut node, dst_type:_| {
+            |mut node, _dst_type:_| {
                 let depth = node.depth;
                 let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                 let pty_editor = PTYListEditor::from_editor(
@@ -69,7 +67,7 @@ pub fn init_os_ctx(parent: Arc<RwLock<Context>>) -> Arc<RwLock<Context>> {
     };
     ctx.write().unwrap().add_morphism(pattern,
         Arc::new(
-            |mut node, dst_type:_| {
+            |mut node, _dst_type:_| {
                 let depth = node.depth;
                 let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                 let pty_editor = PTYListEditor::from_editor(
@@ -120,7 +118,7 @@ pub fn init_os_ctx(parent: Arc<RwLock<Context>>) -> Arc<RwLock<Context>> {
     };
     ctx.write().unwrap().add_morphism(pattern,
         Arc::new(
-            |mut node, dst_type:_| {
+            |mut node, _dst_type:_| {
                 let depth = node.depth;
                 let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                 let pty_editor = PTYListEditor::from_editor(
@@ -171,7 +169,7 @@ pub fn init_os_ctx(parent: Arc<RwLock<Context>>) -> Arc<RwLock<Context>> {
     };
     ctx.write().unwrap().add_morphism(pattern,
         Arc::new(
-            |mut node, dst_type:_| {
+            |mut node, _dst_type:_| {
                 let depth = node.depth;
                 let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                 let pty_editor = PTYListEditor::from_editor(
@@ -183,7 +181,7 @@ pub fn init_os_ctx(parent: Arc<RwLock<Context>>) -> Arc<RwLock<Context>> {
                 node.view = Some(pty_editor.pty_view( ("", " ", "") ));
                 node.cmd = Some(Arc::new(RwLock::new(pty_editor)));
 
-                let process_launcher = crate::process::ProcessLauncher::new(node.clone());
+                let _process_launcher = crate::process::ProcessLauncher::new(node.clone());
 /*
                 node.view = Some(
                     process_launcher.pty_view()
@@ -227,7 +225,7 @@ pub fn init_os_ctx(parent: Arc<RwLock<Context>>) -> Arc<RwLock<Context>> {
     };
     ctx.write().unwrap().add_morphism(pattern,
         Arc::new(
-            |mut node, dst_type:_| {
+            |mut node, _dst_type:_| {
                 let depth = node.depth;
                 let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                 let pty_editor = PTYListEditor::from_editor(

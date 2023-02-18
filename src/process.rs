@@ -5,30 +5,22 @@ use {
             OuterViewPort, ViewPort,
             singleton::*,
             sequence::*,
-        },
-        projection::{
-            filter_sequence::*,
-            map_sequence::*
         }
     },
     nested::{
         editors::{
-            list::{ListCursorMode, PTYListEditor},
-            char::CharEditor,  
+            list::{ListCursorMode},  
         },
         terminal::{
-            TerminalAtom, TerminalEditor, TerminalEditorResult, TerminalEvent, TerminalStyle,
+            TerminalAtom, TerminalEditor, TerminalEvent, TerminalStyle,
             TerminalView,
             widgets::ascii_box::AsciiBox
         },
-        tree::{TreeCursor, TreeNav, TreeNavResult, NestedNode},
-        diagnostics::Diagnostics,
-        type_system::{Context}
+        tree::{TreeCursor, TreeNav, NestedNode}
     },
     std::sync::Arc,
     std::sync::RwLock,
-    termion::event::{Event, Key},
-    cgmath::Vector2
+    termion::event::{Event, Key}
 };
 
 //<<<<>>>><<>><><<>><<<*>>><<>><><<>><<<<>>>>
@@ -224,7 +216,7 @@ impl ObjCommander for ProcessLauncher {
                                     // launch command
                                     self.launch_pty();
                                 }
-                                event => self.cmd_editor.send_cmd_obj(cmd_obj),
+                                _event => self.cmd_editor.send_cmd_obj(cmd_obj),
                             }
                         }
                     }

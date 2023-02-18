@@ -29,17 +29,13 @@ use {
     nested::{
         type_system::{Context, ReprTree},
         editors::{
-            list::{ListCursorMode, PTYListEditor},
-            integer::{PosIntEditor},
-            sum::*
+            list::{ListCursorMode, PTYListEditor}
         },
         terminal::{
-            make_label, Terminal, TerminalAtom, TerminalCompositor, TerminalEditor,
-            TerminalEditorResult, TerminalEvent, TerminalStyle,
+            make_label, Terminal, TerminalCompositor, TerminalEditor, TerminalEvent, TerminalStyle,
             TerminalProjections
         },
-        tree::{TreeNav, TreeCursor, TreeNavResult},
-        diagnostics::{Diagnostics},
+        tree::{TreeNav, TreeCursor},
         commander::ObjCommander
     },
     std::sync::{Arc, RwLock},
@@ -84,7 +80,7 @@ async fn main() {
 
     let c = ctx.clone();
 
-    let mut process_list_editor =
+    let process_list_editor =
         PTYListEditor::new(
             ctx.clone(),
             c.read().unwrap().type_term_from_str("( Pipeline )").unwrap(),

@@ -3,7 +3,7 @@ use {
     std::sync::{Arc, RwLock},
     r3vi::{
         view::{
-            ViewPort, AnyOuterViewPort,
+            AnyOuterViewPort,
             singleton::*
         },
         buffer::{

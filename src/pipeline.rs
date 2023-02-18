@@ -1,36 +1,22 @@
 use {
-    crate::pty::{PTYStatus, PTY},
     r3vi::{
         view::{
             OuterViewPort, ViewPort,
             singleton::*,
             sequence::*,
-        },
-        projection::{
-            filter_sequence::*,
-            map_sequence::*
         }
     },
     nested::{
-        editors::{
-            list::{ListCursorMode, PTYListEditor},
-            char::CharEditor,  
-        },
         terminal::{
-            TerminalAtom, TerminalEditor, TerminalEditorResult, TerminalEvent, TerminalStyle,
+            TerminalAtom, TerminalStyle,
             TerminalView,
-            widgets::ascii_box::AsciiBox,
-            make_label
+            widgets::ascii_box::AsciiBox
         },
-        tree::{TreeCursor, TreeNav, TreeNavResult, NestedNode},
-        diagnostics::Diagnostics,
-        type_system::{Context}
+        tree::{NestedNode}
     },
     std::sync::Arc,
     std::sync::RwLock,
-    std::io::{Read, Write},
-    termion::event::{Event, Key},
-    cgmath::Vector2
+    std::io::{Read, Write}
 };
 
 //<<<<>>>><<>><><<>><<<*>>><<>><><<>><<<<>>>>
@@ -193,7 +179,7 @@ impl PipelineLauncher {
             }
         }
 
-        let mut output_str = String::new();
+        let _output_str = String::new();
         if let Some(mut last_output) = last_output.take() {
             //eprintln!("pipeline output: {}", output_str);
 
@@ -219,7 +205,7 @@ impl ObjCommander for PipelineLauncher {
 
         let co = cmd_obj.read().unwrap();
         let cmd_type = co.get_type().clone();
-        let term_event_type = ctx.type_term_from_str("( TerminalEvent )").unwrap();
+        let _term_event_type = ctx.type_term_from_str("( TerminalEvent )").unwrap();
         let char_type = ctx.type_term_from_str("( Char )").unwrap();
 
 
