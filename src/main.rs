@@ -1,40 +1,24 @@
 extern crate portable_pty;
 extern crate r3vi;
 
-mod pty;
 mod incubator;
 mod morphisms;
-
-// TODO rewrite process & command with incubator rules
+mod pty;
 mod process;
 mod pipeline;
-//mod command;
+mod command;
 
 use {
     cgmath::{Point2, Vector2},
     r3vi::{
-        view::{
-            port::UpdateTask, Observer, ViewPort, AnyOuterViewPort,
-            index::*,
-        },
-        buffer::{
-            vec::*,
-            singleton::*,
-            index_hashmap::*
-        },
-        projection::{
-            decorate_sequence::*
-        }
+        view::{port::UpdateTask, Observer, ViewPort, AnyOuterViewPort, index::*},
+        buffer::{singleton::*, vec::*, index_hashmap::*},
+        projection::{decorate_sequence::*}
     },
     nested::{
         type_system::{Context, ReprTree},
-        editors::{
-            list::{ListCursorMode, PTYListEditor}
-        },
-        terminal::{
-            make_label, Terminal, TerminalCompositor, TerminalEditor, TerminalEvent, TerminalStyle,
-            TerminalProjections
-        },
+        editors::{list::{ListCursorMode, PTYListEditor}},
+        terminal::{make_label, Terminal, TerminalCompositor, TerminalEditor, TerminalEvent, TerminalStyle, TerminalProjections},
         tree::{TreeNav, TreeCursor},
         commander::ObjCommander
     },
@@ -83,7 +67,7 @@ async fn main() {
     let process_list_editor =
         PTYListEditor::new(
             ctx.clone(),
-            c.read().unwrap().type_term_from_str("( Pipeline )").unwrap(),
+            (&ctx, "( Command )").into(),
             None,
             0
         );

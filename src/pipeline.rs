@@ -22,9 +22,10 @@ use {
 //<<<<>>>><<>><><<>><<<*>>><<>><><<>><<<<>>>>
 
 pub struct PipelineLauncher {
-    editor: NestedNode,
+    pub editor: NestedNode,
 
     _ptybox: Arc<RwLock<AsciiBox>>,
+    pub box_port: ViewPort<dyn TerminalView>,
     suspended: bool,
 
     pty_port: ViewPort<dyn TerminalView>,
@@ -45,10 +46,11 @@ impl PipelineLauncher {
         compositor.write().unwrap().push(
             box_port
                 .outer()
-                .map_item(|_idx, x| x.add_style_back(TerminalStyle::fg_color((90, 120, 100)))),
+                .map_item(|_idx, x| x.add_style_back(TerminalStyle::fg_color((30, 80, 50)))),
         );
         compositor.write().unwrap().push(
             editor.view.clone().unwrap()
+                .map_item(|_idx, x| x.add_style_back(TerminalStyle::fg_color((220, 220, 0)))),
         );
 
         PipelineLauncher {
@@ -63,87 +65,55 @@ impl PipelineLauncher {
             suspended: false,
             pty_port,
             comp_port,
+            box_port,
             _compositor: compositor,
         }
     }
 
     pub fn pty_view(&self) -> OuterViewPort<dyn TerminalView> {
-        self.comp_port.outer()
+        self.box_port.outer()
     }
 
-    fn get_strings(&self) -> Vec<Vec<String>> {
+    pub fn editor_view(&self) -> OuterViewPort<dyn TerminalView> {
+        self.editor.get_view()
+    }
 
+    pub fn get_strings(&self) -> Vec<Vec<String>> {
         let ctx = self.editor.ctx.clone().unwrap();
-        let ctx = ctx.read().unwrap();
 
         let mut pipeline_strings = Vec::<Vec<String>>::new();
 
-        if let Some(pipeline_data) = self.editor.data.clone() {
-            let pipeline_view = pipeline_data.read().unwrap()
-                .descend(
-                    &ctx.type_term_from_str("( List Process )").unwrap()
-                )
-                .unwrap()
-                .read().unwrap()
-                .get_view::<dyn SequenceView<Item = NestedNode>>();
+        let pipeline_view = self.editor.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["( List Process )"].into_iter());
 
-            for i in 0..pipeline_view.len().unwrap_or(0) {
-                let process_node = pipeline_view.get(&i).unwrap();
+        for i in 0..pipeline_view.len().unwrap_or(0) {
+            let process_node = pipeline_view.get(&i).unwrap();
+            let mut process_strings = Vec::<String>::new();
 
-                let mut process_strings = Vec::<String>::new();
+            let process_view = process_node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["( List ProcessArg )"].into_iter());
 
-                let process_view = process_node.data
-                    .clone().unwrap()
-                    .read().unwrap()
-                    .descend(
-                        &ctx.type_term_from_str("( List ProcessArg )").unwrap()
-                    )
-                    .unwrap()
-                    .read().unwrap()
-                    .get_view::<dyn SequenceView<Item = NestedNode>>();
-
-                for j in 0..process_view.len().unwrap_or(0) {
-                    let arg_node = process_view.get(&j).unwrap();
-
-                    let arg_view = arg_node.data
-                        .clone().unwrap()
-                        .read().unwrap()
-                        .descend(
-                            &ctx.type_term_from_str("( List Char )").unwrap()
-                        )
-                        .unwrap()
-                        .read().unwrap()
-                        .get_view::<dyn SequenceView<Item = NestedNode>>()
-                        .unwrap();
-
-                    let arg = arg_view.iter().filter_map(
-                        |node| {
-                            if let Some(c_data) = node.data.clone() {
-                                if let Some(c_view) = c_data
-                                    .read().unwrap()
-                                    .get_view::<dyn SingletonView<Item = Option<char>>>()
-                                {
-                                    c_view.get()
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        }
-                    ).collect::<String>();
-
-                    process_strings.push(arg);
+            for j in 0..process_view.len().unwrap_or(0) {
+                let arg_node = process_view.get(&j).unwrap();
+                let arg_view = arg_node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["( List Char )"].into_iter());
+                
+                let mut arg = String::new();
+                for k in 0..arg_view.len().unwrap_or(0) {
+                    let char_node = arg_view.get(&k).unwrap();
+                    let char_view = char_node.get_data_view::<dyn SingletonView<Item = Option<char>>>(vec![].into_iter());
+                    if let Some(c) = char_view.get() {
+                        arg.push(c);
+                    }
                 }
 
-                pipeline_strings.push(process_strings);
+                process_strings.push(arg);
             }
+
+            pipeline_strings.push(process_strings);
         }
 
         pipeline_strings
     }
 
-    fn launch(&mut self) {
+    pub fn launch(&mut self) {
         let strings = self.get_strings();
 
         let mut last_output : Option<std::process::ChildStdout> = None;
@@ -151,7 +121,9 @@ impl PipelineLauncher {
         for process_str in strings {
             if process_str.len() > 0 {
                 let mut process = std::process::Command::new(process_str[0].clone());
-                process.stdin(std::process::Stdio::piped());
+                if last_output.is_some() {
+                    process.stdin(std::process::Stdio::piped());
+                }
                 process.stdout(std::process::Stdio::piped());
 
                 for i in 1..process_str.len() {

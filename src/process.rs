@@ -77,15 +77,12 @@ impl ProcessLauncher {
 
     pub fn launch_pty(&mut self) {
         let ctx = self.cmd_editor.ctx.clone().unwrap();
-        let ctx = ctx.read().unwrap();
 
         let mut strings = Vec::<String>::new();
 
         if let Some(data) = self.cmd_editor.data.clone() {
             let v = data.read().unwrap()
-                .descend(
-                    &ctx.type_term_from_str("( List ProcessArg )").unwrap()
-                )
+                .descend((&ctx, "( List ProcessArg )"))
                 .unwrap()
                 .read().unwrap()
                 .get_view::<dyn SequenceView<Item = NestedNode>>();
@@ -100,9 +97,7 @@ impl ProcessLauncher {
                     let arg_view = arg_data
                         .read()
                         .unwrap()
-                        .descend(
-                            &ctx.type_term_from_str("( List Char )").unwrap()
-                        )
+                        .descend((&ctx, "( List Char )"))
                         .unwrap()
                         .read().unwrap()
                         .get_view::<dyn SequenceView<Item = NestedNode>>()

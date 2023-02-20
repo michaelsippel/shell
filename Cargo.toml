@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-r3vi = { git = "https://git.exobiont.de/senvas/r3vi.git" }
+#r3vi = { git = "https://git.exobiont.de/senvas/r3vi.git" }
+r3vi = { path = "../r3vi" }
 #nested = { git = "https://git.exobiont.de/senvas/nested.git" }
 nested = { path = "../nested/nested" }
 cgmath = "*"

@@ -1,330 +1,255 @@
+
 use {
-    std::{
-        sync::{Arc, RwLock},
-        collections::HashMap
-    },
-    cgmath::{Vector2, Point2},
-    termion::event::{Event, Key},
-    nested::{
-        vec::VecBuffer,
-        list::{ListEditor, PTYListEditor},
-        sequence::{SequenceView, decorator::{Separate, Wrap, SeqDecorStyle}},
-        core::{TypeTerm, Context},
-        core::{OuterViewPort, ViewPort},
-        index::{IndexArea, IndexView},
-        char_editor::CharEditor,
-        terminal::{
-            TerminalAtom, TerminalEditor, TerminalEditorResult, TerminalEvent, TerminalStyle, TerminalView, make_label
+    r3vi::{
+        view::{
+            AnyOuterViewPort, OuterViewPort, ViewPort,
+            singleton::*,
+            sequence::*,
         },
-        tree::{TreeCursor, TreeNav, TreeNavResult},
-        diagnostics::{Diagnostics},
-        product::ProductEditor,
-        sum::SumEditor,
-        Nested
-    }
+        buffer::index_hashmap::*
+    },
+    nested::{
+        editors::{list::{ListEditor, ListCursorMode}, sum::SumEditor},
+        terminal::{
+            TerminalAtom, TerminalStyle, TerminalView,
+            widgets::ascii_box::AsciiBox, TerminalEvent
+        },
+        tree::{NestedNode, TreeNav, TreeCursor},
+        type_system::{Context, ReprTree},
+        commander::ObjCommander,
+        PtySegment
+    },
+    std::sync::Arc,
+    std::sync::RwLock,
+    std::io::{Read, Write},
+    cgmath::{Point2, Vector2},
+    termion::event::{Event, Key},
+
+    crate::pipeline::PipelineLauncher
 };
 
-trait Action {
-    fn make_editor(&self, ctx: Arc<RwLock<Context>>) -> Arc<RwLock<dyn Nested + Send + Sync>>;
+//<<<<>>>><<>><><<>><<<*>>><<>><><<>><<<<>>>>
+
+#[derive(Clone)]
+enum CommandState {
+    Incubator(Arc<RwLock<PipelineLauncher>>),
+    CD(NestedNode),
+    Pipeline(Arc<RwLock<PipelineLauncher>>),
 }
 
-pub struct ActCd {}
-impl Action for ActCd {
-    fn make_editor(&self, ctx: Arc<RwLock<Context>>) -> Arc<RwLock<dyn Nested + Send + Sync>> {
-        let depth = 1;
-        Arc::new(RwLock::new(ProductEditor::new(depth, ctx.clone())
-                             .with_n(Point2::new(0, 0), vec![ ctx.read().unwrap().type_term_from_str("( Path )").unwrap() ] )
-        )) as Arc<RwLock<dyn Nested + Send + Sync>>
-    }
-}
-
-pub struct ActLs {}
-impl Action for ActLs {
-    fn make_editor(&self, ctx: Arc<RwLock<Context>>) -> Arc<RwLock<dyn Nested + Send + Sync>> {
-        let depth = 1;
-        Arc::new(RwLock::new(ProductEditor::new(depth, ctx.clone())
-                             .with_t(Point2::new(1, 0), " Files")
-                             .with_n(Point2::new(0, 0), vec![ ctx.read().unwrap().type_term_from_str("( List Path )").unwrap() ] )
-                             .with_t(Point2::new(1, 1), " Options")
-                             .with_n(Point2::new(0, 1), vec![ ctx.read().unwrap().type_term_from_str("( List String )").unwrap() ] )
-
-        )) as Arc<RwLock<dyn Nested + Send + Sync>>
-    }
-}
-
-pub struct ActEcho {}
-impl Action for ActEcho {
-    fn make_editor(&self, ctx: Arc<RwLock<Context>>) -> Arc<RwLock<dyn Nested + Send + Sync>> {
-        let depth = 1;
-        
-        let a = Arc::new(RwLock::new(ProductEditor::new(depth, ctx.clone())
-                             .with_n(Point2::new(0, 0), vec![ ctx.read().unwrap().type_term_from_str("( String )").unwrap() ] )
-
-        )) as Arc<RwLock<dyn Nested + Send + Sync>>;
-
-        let b = Arc::new(RwLock::new(ProductEditor::new(depth, ctx.clone())
-                             .with_n(Point2::new(0, 0), vec![ ctx.read().unwrap().type_term_from_str("( PosInt 16 BigEndian )").unwrap() ] )
-
-        )) as Arc<RwLock<dyn Nested + Send + Sync>>;
-
-        let mut x = Arc::new(RwLock::new( SumEditor::new(
-            vec![
-                a, b
-            ]
-        )  ));
-
-        x.write().unwrap().select(0);
-        x
-    }
-}
-
-pub struct ActCp {}
-impl Action for ActCp {
-    fn make_editor(&self, ctx: Arc<RwLock<Context>>) -> Arc<RwLock<dyn Nested + Send + Sync>> {
-        let depth = 1;
-        Arc::new(RwLock::new(ProductEditor::new(depth, ctx.clone())
-                             .with_t(Point2::new(1, 1), " Source")
-                             .with_n(Point2::new(0, 1), vec![ ctx.read().unwrap().type_term_from_str("( Path )").unwrap() ] )
-                             .with_t(Point2::new(1, 2), " Destination")
-                             .with_n(Point2::new(0, 2), vec![ ctx.read().unwrap().type_term_from_str("( Path )").unwrap() ] )
-                             .with_t(Point2::new(1, 3), " Options")
-                             .with_n(Point2::new(0, 3), vec![ ctx.read().unwrap().type_term_from_str("( List Symbol )").unwrap() ] )
-        )) as Arc<RwLock<dyn Nested + Send + Sync>>
-    }
-}
-
-pub struct ActNum {}
-impl Action for ActNum {
-    fn make_editor(&self, ctx: Arc<RwLock<Context>>) -> Arc<RwLock<dyn Nested + Send + Sync>> {
-        let depth = 1;
-        Arc::new(RwLock::new(ProductEditor::new(depth, ctx.clone())
-                             .with_t(Point2::new(1, 1), " Value")
-                             .with_n(Point2::new(0, 1), vec![ ctx.read().unwrap().type_term_from_str("( PosInt 16 BigEndian )").unwrap() ] )
-                             .with_t(Point2::new(1, 2), " Radix")
-                             .with_n(Point2::new(0, 2), vec![ ctx.read().unwrap().type_term_from_str("( PosInt 10 BigEndian )").unwrap() ] )
-
-    )) as Arc<RwLock<dyn Nested + Send + Sync>>
-
-//        Arc::new(RwLock::new(nested::integer::PosIntEditor::new(10)))
-    }
-}
-
-pub struct ActLet {}
-impl Action for ActLet {
-    fn make_editor(&self, ctx: Arc<RwLock<Context>>) -> Arc<RwLock<dyn Nested + Send + Sync>> {
-        let depth = 1;
-        Arc::new(RwLock::new(ProductEditor::new(depth, ctx.clone())
-                             .with_n(Point2::new(0, 0), vec![ ctx.read().unwrap().type_term_from_str("( Symbol )").unwrap() ] )
-                             .with_t(Point2::new(1, 0), " : ")
-                             .with_n(Point2::new(2, 0), vec![ ctx.read().unwrap().type_term_from_str("( TypeTerm )").unwrap() ] )
-                             .with_t(Point2::new(3, 0), " := ")
-                             .with_n(Point2::new(4, 0), vec![ ctx.read().unwrap().type_term_from_str("( PosInt 16 BigEndian )").unwrap() ] )
-        )) as Arc<RwLock<dyn Nested + Send + Sync>>
-    }
-}
-
-pub struct Commander {
+pub struct Command {
     ctx: Arc<RwLock<Context>>,
-    cmds: HashMap<String, Arc<dyn Action + Send + Sync>>,
+    grid: r3vi::buffer::index_hashmap::IndexBuffer<Point2<i16>, OuterViewPort<dyn TerminalView>>,
 
-    valid: Arc<RwLock<bool>>,
-    confirmed: bool,
-    symbol_editor: PTYListEditor<CharEditor>,
-    cmd_editor: Option<Arc<RwLock<dyn Nested + Send + Sync>>>,
+    comp_port: ViewPort<dyn TerminalView>,
+    cwd_node: NestedNode,
+    state: CommandState,
 
-    view_elements: VecBuffer<OuterViewPort<dyn TerminalView>>,
-    out_port: OuterViewPort<dyn TerminalView>,
+    cwd: String,
 
-    m_buf: VecBuffer<OuterViewPort<dyn SequenceView<Item = nested::diagnostics::Message>>>,
-    msg_port: OuterViewPort<dyn SequenceView<Item = nested::diagnostics::Message>>
+    sum_editor: NestedNode
 }
 
-impl Commander {
-    pub fn new(ctx: Arc<RwLock<Context>>) -> Self {
-        let port = ViewPort::new();
-        let mut view_elements = VecBuffer::with_port(port.inner());
+impl Into<NestedNode> for Command {
+    fn into(self) -> NestedNode {
+        self.into_node()
+    }
+}
 
-        let symbol_editor = PTYListEditor::new(
-            || {
-                Arc::new(RwLock::new(CharEditor::new()))
-            },
-            SeqDecorStyle::Plain,
-            '\n',
-            0
+impl Command {
+    pub fn into_node(self) -> NestedNode {
+        self.sum_editor.clone()
+            .set_view(self.comp_port.outer())
+            .set_cmd(Arc::new(RwLock::new(self)))
+    }
+
+    pub fn new(ctx: Arc<RwLock<Context>>, cwd: String) -> Self {
+        let mut cwd_node = Context::make_node(&ctx, (&ctx, "( Path )").into(), 0).unwrap();
+
+        cwd_node.goto(TreeCursor::home());
+        for c in cwd.chars() {
+            let buf = r3vi::buffer::singleton::SingletonBuffer::new(c);
+
+            cwd_node.send_cmd_obj(
+                ReprTree::new_leaf((&ctx, "( Char )"), AnyOuterViewPort::from(buf.get_port()))
+            );
+        }
+        cwd_node.goto(TreeCursor::none());
+
+        let mut grid = IndexBuffer::new();
+        let mut incubator_node = Context::make_node(&ctx, (&ctx, "( Pipeline )").into(), 1).unwrap();
+        let mut path_node = Context::make_node(&ctx, (&ctx, "( Path )").into(), 2).unwrap();
+
+        let mut sum_editor = SumEditor::new(
+            vec![
+                incubator_node.clone(),
+                path_node
+            ]
+        );
+        sum_editor.select(0);
+
+        grid.insert_iter(
+            vec![
+                (Point2::new(0, 0), cwd_node.get_view()
+                 .map_item(|_idx, x| x.add_style_back(nested::utils::color::fg_style_from_depth(1)))
+                ),
+                (Point2::new(1, 0), nested::terminal::make_label("$ ")),
+                (Point2::new(3, 0), sum_editor.pty_view())
+            ]
         );
 
-        let valid = Arc::new(RwLock::new(false));
-        view_elements.push(symbol_editor
-                           .get_term_view()
-                           .map_item({
-                               let valid = valid.clone();
-                               move
-                               |pos, mut a| {
-                                   if *valid.read().unwrap() {
-                                       a.add_style_back(TerminalStyle::fg_color((0,255,0)))
-                                   } else {
-                                       a.add_style_back(TerminalStyle::fg_color((255,0,0)))
-                                   }
-                               }
-                           }));
+        let product = nested::editors::product::ProductEditor::new(0, ctx.clone());
 
-        let mut cmds = HashMap::new();
+        let mut comp_port = ViewPort::new();
+        let compositor = nested::terminal::TerminalCompositor::new(comp_port.inner());
 
-        cmds.insert("let".into(), Arc::new(ActLet{}) as Arc<dyn Action + Send + Sync>);
-        cmds.insert("cd".into(), Arc::new(ActCd{}) as Arc<dyn Action + Send + Sync>);
-        cmds.insert("echo".into(), Arc::new(ActEcho{}) as Arc<dyn Action + Send + Sync>);
-        cmds.insert("ls".into(), Arc::new(ActLs{}) as Arc<dyn Action + Send + Sync>);
-        cmds.insert("cp".into(), Arc::new(ActCp{}) as Arc<dyn Action + Send + Sync>);
-        cmds.insert("num".into(), Arc::new(ActNum{}) as Arc<dyn Action + Send + Sync>);
-
-        let m_buf = VecBuffer::new();
-        let mut c = Commander {
-            ctx,
-            cmds,
-            valid,
-            confirmed: false,
-            symbol_editor,
-            cmd_editor: None,
-            view_elements,
-            out_port: port.outer()
-                .to_sequence()
-                .separate(make_label(" "))
-                .to_grid_horizontal()
-                .flatten(),
-
-            msg_port: m_buf.get_port()
-                .to_sequence()
-                .flatten(),
-            m_buf
-        };
-
-        c
+        compositor.write().unwrap().push(
+            incubator_node.get_edit::<PipelineLauncher>().unwrap()
+                .read().unwrap()
+                .box_port.outer()
+                .map_item(|_idx, x| x.add_style_back(TerminalStyle::fg_color((30, 80, 50))))
+        );
+        compositor.write().unwrap().push(
+            grid.get_port().flatten()
+                .map_item(|_idx, x| x.add_style_back(TerminalStyle::fg_color((220, 220, 0)))),
+        );
+        
+        Command {
+            ctx: ctx.clone(),
+            grid,
+            cwd,
+            cwd_node,
+            comp_port,
+            state: CommandState::Incubator(incubator_node.get_edit::<PipelineLauncher>().unwrap()),
+            sum_editor: sum_editor.into_node(ctx)
+        }
     }
 }
 
-impl TerminalEditor for Commander {
-    fn get_term_view(&self) -> OuterViewPort<dyn TerminalView> {
-        self.out_port.clone()
-    }
+impl ObjCommander for Command {
+    fn send_cmd_obj(&mut self, obj: Arc<RwLock<ReprTree>>) {
+        let cmd_obj = obj.clone();
+        let cmd_obj = cmd_obj.read().unwrap();
+        let cmd_type = cmd_obj.get_type().clone();
 
-    fn handle_terminal_event(&mut self, event: &TerminalEvent) -> TerminalEditorResult {
-        if let (Some(cmd_editor), true) = (self.cmd_editor.as_ref(), self.confirmed) {
-            match event {
-                TerminalEvent::Input(Event::Key(Key::Char('\n'))) => {
-                    let mut c = cmd_editor.write().unwrap();
-                    if c.nexd() == TreeNavResult::Exit {
-                        // run
-                        c.goto(TreeCursor::none());
-
-                        TerminalEditorResult::Exit
-                    } else {
-                        TerminalEditorResult::Continue
-                    }
+        let char_value =
+            if cmd_type == (&self.ctx, "( Char )").into() {
+                if let Some(cmd_view) = cmd_obj.get_view::<dyn SingletonView<Item = char>>() {
+                    Some(cmd_view.get())
+                } else {
+                    None
                 }
-                event => {
-                    cmd_editor.write().unwrap().handle_terminal_event(event)
+            } else {
+                None
+            };
+
+        let term_event_value =
+            if cmd_type == (&self.ctx, "( TerminalEvent )").into() {
+                if let Some(cmd_view) = cmd_obj.get_view::<dyn SingletonView<Item = TerminalEvent>>() {
+                    Some(cmd_view.get())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+        match self.state.clone() {
+            CommandState::Incubator(mut incubator_editor) => {
+                match char_value {
+                    Some(' ') => {
+                            let strings = incubator_editor.read().unwrap().get_strings();
+
+                            let mut cd_cmd = false;
+
+                            if strings.len() > 0 {
+                                if strings[0].len() > 0 {
+                                    if strings[0][0] == "cd" {
+                                        cd_cmd = true;
+                                    }
+                                }
+                            }
+
+                            if cd_cmd {
+                                self.grid.insert(Point2::new(2,0), nested::terminal::make_label("cd "));
+                                incubator_editor.write().unwrap().editor.goto(TreeCursor::none());
+
+                                let se = self.sum_editor.get_edit::<SumEditor>().unwrap();
+                                let mut se = se.write().unwrap();
+
+                                se.select(1);
+                                let mut path_node = se.editors[1].clone();
+
+                                self.state = CommandState::CD(path_node.clone());
+
+                                path_node.goto(TreeCursor::home());
+                            } else {
+                                incubator_editor.write().unwrap().send_cmd_obj(obj);
+                                self.state = CommandState::Pipeline(incubator_editor);
+                            }
+                    }
+                    _ => {
+                        self.sum_editor.send_cmd_obj(obj); 
+                    }
                 }
             }
-        } else {
-            match event {
-                TerminalEvent::Input(Event::Key(Key::Char(' '))) |
-                TerminalEvent::Input(Event::Key(Key::Char('\n'))) => {
-                    if let Some(editor) = &self.cmd_editor {
-                        self.confirmed = true;
-                        self.symbol_editor.up();
-                        editor.write().unwrap().qpxev();
 
-                        *self.view_elements.get_mut(1) = editor.read().unwrap().get_term_view();
+            CommandState::CD(mut path) => {
+                match term_event_value {
+                    Some(TerminalEvent::Input(Event::Key(Key::Backspace))) => {
+                        if path.get_cursor().tree_addr.iter().fold(
+                            true,
+                            |s, x| s && *x == 0
+                        ) {
+                            let se = self.sum_editor.get_edit::<SumEditor>().unwrap();
+                            let mut se = se.write().unwrap();
 
-                        self.m_buf.push(editor.read().unwrap().get_msg_port());
-                        
-                        if *event == TerminalEvent::Input(Event::Key(Key::Char('\n'))) {
-                            return self.handle_terminal_event(event);
-                        }
-                    } else {
-                        // undefined command
-                        let mut b = VecBuffer::new();
-                        b.push(nested::diagnostics::make_error(nested::terminal::make_label(&format!("invalid symbol {}", self.symbol_editor.get_string()))));
-                        self.m_buf.clear();
-                        self.m_buf.push(b.get_port().to_sequence());
-                    }
-                    
-                    TerminalEditorResult::Continue
-                }
+                            let ed = se.editors[0].clone()
+                                    .get_edit::<PipelineLauncher>().unwrap();
 
-                event => {
-                    self.m_buf.clear();
-                    let res = self.symbol_editor.handle_terminal_event(event);
-                    let symbol = self.symbol_editor.get_string();
+                            self.state = CommandState::Incubator(ed);
+                            se.select(0);
 
-                    if let Some(action) = self.cmds.get(&symbol) {
-                        let editor = action.make_editor(self.ctx.clone());
+                            self.grid.remove(Point2::new(2, 0));
 
-                        if self.view_elements.len() == 1 {
-                            self.view_elements.push(editor.read().unwrap().get_term_view().map_item(|p,a| a.add_style_front(TerminalStyle::fg_color((80,80,80)))));
+                            se.goto(TreeCursor {
+                                leaf_mode: ListCursorMode::Insert,
+                                tree_addr: vec![ 0, 0, -1 ]
+                            });
                         } else {
-                            *self.view_elements.get_mut(1) = editor.read().unwrap().get_term_view().map_item(|p,a| a.add_style_front(TerminalStyle::fg_color((80,80,80))));
-                        }
-
-                        self.cmd_editor = Some(editor);
-                        *self.valid.write().unwrap() = true;
-                    } else {
-                        /*
-                        let mut b = VecBuffer::new();
-                        b.push(nested::diagnostics::make_error(nested::terminal::make_label(&format!("invalid symbol {}", self.symbol_editor.get_string()))));
-                        self.m_buf.push(b.get_port().to_sequence());
-*/
-                        self.cmd_editor = None;
-                        *self.valid.write().unwrap() = false;
-
-                        if self.view_elements.len() > 1 {
-                            self.view_elements.remove(1);
+                            self.sum_editor.send_cmd_obj(obj.clone());
                         }
                     }
-
-                    res
+                    _ => {
+                        match char_value {
+                            Some('\n') => {
+                                // todo set cwd
+                                /*
+                                let pwd_edit = self.ctx.write().unwrap()
+                                    .get_obj("PWD")
+                                    .get_edit::<ListEditor>().unwrap();
+                                */
+                            },
+                            _ => {
+                                self.sum_editor.send_cmd_obj(obj); 
+                            }
+                        }
+                    }
                 }
-            }        
+
+            }
+
+            CommandState::Pipeline(mut pipeline) => {
+                match char_value {
+                    Some('\n') => {
+                        pipeline.write().unwrap().launch();
+                    },
+                    _ => {
+                        pipeline.write().unwrap().send_cmd_obj(obj);
+                    }
+                }
+            }
         }
     }
 }
-
-impl Diagnostics for Commander {
-    fn get_msg_port(&self) -> OuterViewPort<dyn SequenceView<Item = nested::diagnostics::Message>> {
-        self.msg_port.clone()
-    }
-}
-
-impl TreeNav for Commander {
-    fn get_cursor(&self) -> TreeCursor {
-        if let (Some(cmd_editor), true) = (self.cmd_editor.as_ref(), self.confirmed) {
-            cmd_editor.write().unwrap().get_cursor()
-        } else {
-            self.symbol_editor.get_cursor()
-        }
-    }
-    fn get_cursor_warp(&self) -> TreeCursor {
-        if let (Some(cmd_editor), true) = (self.cmd_editor.as_ref(), self.confirmed) {
-            cmd_editor.write().unwrap().get_cursor_warp()
-        } else {
-            self.symbol_editor.get_cursor_warp()
-        }
-    }
-    fn goby(&mut self, dir: Vector2<isize>) -> TreeNavResult {
-        if let (Some(cmd_editor), true) = (self.cmd_editor.as_ref(), self.confirmed) {
-            cmd_editor.write().unwrap().goby(dir)
-        } else {
-            self.symbol_editor.goby(dir)
-        }
-    }
-    fn goto(&mut self, cur: TreeCursor) -> TreeNavResult {
-        if let (Some(cmd_editor), true) = (self.cmd_editor.as_ref(), self.confirmed) {
-            cmd_editor.write().unwrap().goto(cur)
-        } else {
-            self.symbol_editor.goto(cur)
-        }
-    }
-}
-
-impl Nested for Commander {}
 
