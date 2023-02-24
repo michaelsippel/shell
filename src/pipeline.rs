@@ -26,6 +26,8 @@ use {
 pub struct PipelineLauncher {
     pub editor: NestedNode,
 
+    pub cwd: Option<String>,
+
     _ptybox: Arc<RwLock<AsciiBox>>,
     pub box_port: ViewPort<dyn TerminalView>,
     suspended: bool,
@@ -120,6 +122,7 @@ impl PipelineLauncher {
             suspended: false,
             comp_port,
             box_port,
+            cwd: None,
             _compositor: compositor,
         }
     }
@@ -174,53 +177,45 @@ impl PipelineLauncher {
     pub fn launch(&mut self) {
         let strings = self.get_strings();
 
-        let mut last_output : Option<std::process::ChildStdout> = None;
-
+        let mut execs = Vec::new();
         for process_str in strings {
             if process_str.len() > 0 {
-                let mut process = std::process::Command::new(process_str[0].clone());
+                let mut exec = subprocess::Exec::cmd(process_str[0].clone());
 
-                if last_output.is_some() {
-                    process.stdin(std::process::Stdio::piped());
+                if let Some(cwd) = self.cwd.as_ref() {
+                    exec = exec.cwd(cwd);
                 }
-                process.stdout(std::process::Stdio::piped());
 
                 for i in 1..process_str.len() {
-                    process.arg(process_str[i].clone());
+                    exec = exec.arg(process_str[i].clone());
                 }
-
-                if let Ok(child) = process.spawn( ) {
-
-                    if let Some(mut last_output) = last_output.take() {
-                        let mut s = String::new();
-
-                        match last_output.read_to_string(&mut s) {
-                            Err(why) => panic!("couldn't read stdout: {}", why),
-                            Ok(_) => {},
-                        }
-
-                        match child.stdin.unwrap().write_all(s.as_bytes()) {
-                            Err(why) => panic!("couldn't write to stdin: {}", why),
-                            Ok(_) => {},
-                        }
-                    }
-
-                    last_output = child.stdout;
-                }
+                execs.push(exec);
             }
         }
 
-        let _output_str = String::new();
-        if let Some(mut last_output) = last_output.take() {
-            //eprintln!("pipeline output: {}", output_str);
+        if execs.len() > 1 {
+            let pipeline = subprocess::Pipeline::from_exec_iter(execs);
 
-            let max_size = cgmath::Vector2::new(80, 40);
+            if let Ok(mut stdout) = pipeline.stream_stdout() {
+                let max_size = cgmath::Vector2::new(80, 40);
 
-            let port = self.pty_port.inner();
+                let port = self.pty_port.inner();
 
-            async_std::task::spawn_blocking(move || {
-                nested::terminal::ansi_parser::read_ansi_from(&mut last_output, max_size, port);
-            });
+                async_std::task::spawn_blocking(move || {
+                    nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
+                });
+            }
+        } else if execs.len() == 1 {
+            let e = execs[0].clone();
+            if let Ok(mut stdout) = e.stream_stdout() {
+                let max_size = cgmath::Vector2::new(80, 40);
+
+                let port = self.pty_port.inner();
+
+                async_std::task::spawn_blocking(move || {
+                    nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
+                });
+            }
         }
     }    
 }

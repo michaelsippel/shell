@@ -142,6 +142,35 @@ impl Command {
             sum_editor: sum_editor.into_node(ctx)
         }
     }
+
+    
+    pub fn get_cwd_string(&self) -> String {
+        let mut string = String::new();
+
+        let cd_path = self.cwd_node.get_data_view::<dyn SequenceView<Item = NestedNode>>(
+            vec![
+                "( List PathSegment )"
+            ].into_iter()
+        ).unwrap();
+
+        for segment in cd_path.iter() {
+            let mut node = segment.clone();
+            node.goto(TreeCursor::none());
+
+            let segment_view = node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["( List Char )"].into_iter());
+
+            for k in 0..segment_view.len().unwrap_or(0) {
+                let char_node = segment_view.get(&k).unwrap();
+                let char_view = char_node.get_data_view::<dyn SingletonView<Item = Option<char>>>(vec![].into_iter());
+                if let Some(c) = char_view.get() {
+                    string.push(c);
+                }
+            }
+            string.push('/');
+        }
+        
+        string
+    }
 }
 
 impl ObjCommander for Command {
@@ -290,12 +319,14 @@ impl ObjCommander for Command {
 
                                 se.editors[1] = Context::make_node(&self.ctx, (&self.ctx, "( Path )").into(), 1).unwrap();
 
-                                let np = Context::make_node(&self.ctx, (&self.ctx, "( Pipeline )").into(), 2).unwrap();
+                                let pipeline_editor = se.editors[0].get_edit::<PipelineLauncher>().unwrap();
+                                pipeline_editor.write().unwrap().cwd = Some(self.get_cwd_string());
+                                let pipeline_list_edit = pipeline_editor.write().unwrap().editor.get_edit::<ListEditor>().unwrap();
+                                pipeline_list_edit.write().unwrap().data.clear();
 
-                                self.state = CommandState::Incubator(np.get_edit::<PipelineLauncher>().unwrap());
+                                self.state = CommandState::Incubator(pipeline_editor);
 
                                 self.grid.remove(Point2::new(2, 0));
-                                se.editors[0] = np;
                                 se.select(0);
                                 se.goto(TreeCursor::home());
 
@@ -307,7 +338,6 @@ impl ObjCommander for Command {
                         }
                     }
                 }
-
             }
 
             CommandState::Pipeline(mut pipeline) => {

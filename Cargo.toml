@@ -8,6 +8,7 @@ edition = "2018"
 r3vi = { path = "../r3vi" }
 #nested = { git = "https://git.exobiont.de/senvas/nested.git" }
 nested = { path = "../nested/nested" }
+subprocess = "0.2.9"
 cgmath = "*"
 termion = "1.5.5"
 bincode = "*"
