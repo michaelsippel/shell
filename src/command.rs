@@ -321,6 +321,7 @@ impl ObjCommander for Command {
 
                                 let pipeline_editor = se.editors[0].get_edit::<PipelineLauncher>().unwrap();
                                 pipeline_editor.write().unwrap().cwd = Some(self.get_cwd_string());
+                                pipeline_editor.write().unwrap().pty_reset();
                                 let pipeline_list_edit = pipeline_editor.write().unwrap().editor.get_edit::<ListEditor>().unwrap();
                                 pipeline_list_edit.write().unwrap().data.clear();
 

@@ -4,6 +4,9 @@ use {
             OuterViewPort, ViewPort,
             singleton::*,
             sequence::*,
+        },
+        buffer::{
+            index_hashmap::*
         }
     },
     nested::{
@@ -217,7 +220,12 @@ impl PipelineLauncher {
                 });
             }
         }
-    }    
+    }
+
+    pub fn pty_reset(&mut self) {
+        let mut empty = IndexBuffer::new();
+        self.pty_port.set_view(empty.get_port().get_view());
+    }
 }
 
 use nested::type_system::ReprTree;
