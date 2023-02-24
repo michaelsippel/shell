@@ -16,7 +16,7 @@ use {
             TerminalView,
             widgets::ascii_box::AsciiBox
         },
-        tree::{TreeCursor, TreeNav, NestedNode},
+        tree::{TreeCursor, TreeNav, NestedNode, TreeNavResult},
         type_system::{Context, TypeTerm, MorphismTypePattern}
     },
     std::sync::Arc,
@@ -254,7 +254,7 @@ use nested::type_system::ReprTree;
 use nested::commander::ObjCommander;
 
 impl ObjCommander for ProcessLauncher {
-    fn send_cmd_obj(&mut self, cmd_obj: Arc<RwLock<ReprTree>>) {
+    fn send_cmd_obj(&mut self, cmd_obj: Arc<RwLock<ReprTree>>) -> TreeNavResult {
 
         // todo: move to observer of status view
         if let PTYStatus::Done { status: _ } = self.status_port.outer().get_view().get() {
@@ -289,6 +289,8 @@ impl ObjCommander for ProcessLauncher {
                             leaf_mode: ListCursorMode::Insert,
                             tree_addr: vec![],
                         });
+
+                        TreeNavResult::Exit
                     }
                     TerminalEvent::Input(Event::Key(Key::Ctrl('z'))) => {
                         self.suspended = true;
@@ -296,21 +298,27 @@ impl ObjCommander for ProcessLauncher {
                             leaf_mode: ListCursorMode::Insert,
                             tree_addr: vec![],
                         });
+
+                        TreeNavResult::Exit
                     }
                     event => {
                         if let Some(pty) = self.pty.as_mut() {
                             pty.handle_terminal_event(&event);
+                            TreeNavResult::Continue
                         } else {
                             match event {
                                 TerminalEvent::Input(Event::Key(Key::Char('\n'))) => {
                                     // launch command
                                     self.launch_pty();
+                                    TreeNavResult::Continue
                                 }
-                                _event => self.cmd_editor.send_cmd_obj(cmd_obj),
+                                _event => { self.cmd_editor.send_cmd_obj(cmd_obj) },
                             }
                         }
                     }
                 }
+            } else {
+                TreeNavResult::Exit
             }
         } else if cmd_type == char_type {
 
@@ -320,17 +328,17 @@ impl ObjCommander for ProcessLauncher {
                 
                 if c == '\n' {
                     self.launch_pty();
+                    TreeNavResult::Exit
                 } else {
-                    self.cmd_editor.send_cmd_obj(cmd_obj);
-                }
-                
+                    self.cmd_editor.send_cmd_obj(cmd_obj)
+                }                
             } else {
                 drop(co);
-                self.cmd_editor.send_cmd_obj(cmd_obj);
+                self.cmd_editor.send_cmd_obj(cmd_obj)
             }
         } else {
             drop(co);
-            self.cmd_editor.send_cmd_obj(cmd_obj);
+            self.cmd_editor.send_cmd_obj(cmd_obj)
         }
     }
 }

@@ -14,7 +14,7 @@ use {
             TerminalAtom, TerminalStyle, TerminalView,
             widgets::ascii_box::AsciiBox, TerminalEvent
         },
-        tree::{NestedNode, TreeNav, TreeCursor},
+        tree::{NestedNode, TreeNav, TreeCursor, TreeNavResult},
         type_system::{Context, ReprTree, TypeTerm},
         commander::ObjCommander,
         PtySegment
@@ -145,7 +145,7 @@ impl Command {
 }
 
 impl ObjCommander for Command {
-    fn send_cmd_obj(&mut self, obj: Arc<RwLock<ReprTree>>) {
+    fn send_cmd_obj(&mut self, obj: Arc<RwLock<ReprTree>>) -> TreeNavResult {
         let cmd_obj = obj.clone();
         let cmd_obj = cmd_obj.read().unwrap();
         let cmd_type = cmd_obj.get_type().clone();
@@ -176,38 +176,39 @@ impl ObjCommander for Command {
             CommandState::Incubator(mut incubator_editor) => {
                 match char_value {
                     Some(' ') => {
-                            let strings = incubator_editor.read().unwrap().get_strings();
+                        let strings = incubator_editor.read().unwrap().get_strings();
 
-                            let mut cd_cmd = false;
- 
-                            if strings.len() > 0 {
-                                if strings[0].len() > 0 {
-                                    if strings[0][0] == "cd" {
-                                        cd_cmd = true;
-                                    }
+                        let mut cd_cmd = false;
+                        
+                        if strings.len() > 0 {
+                            if strings[0].len() > 0 {
+                                if strings[0][0] == "cd" {
+                                    cd_cmd = true;
                                 }
                             }
+                        }
 
-                            if cd_cmd {
-                                self.grid.insert(Point2::new(2,0), nested::terminal::make_label("cd "));
-                                incubator_editor.write().unwrap().editor.goto(TreeCursor::none());
+                        if cd_cmd {
+                            self.grid.insert(Point2::new(2,0), nested::terminal::make_label("cd "));
+                            incubator_editor.write().unwrap().editor.goto(TreeCursor::none());
 
-                                let se = self.sum_editor.get_edit::<SumEditor>().unwrap();
-                                let mut se = se.write().unwrap();
+                            let se = self.sum_editor.get_edit::<SumEditor>().unwrap();
+                            let mut se = se.write().unwrap();
 
-                                se.select(1);
-                                let mut path_node = se.editors[1].clone();
+                            se.select(1);
+                            let mut path_node = se.editors[1].clone();
 
-                                self.state = CommandState::CD(path_node.clone());
+                            self.state = CommandState::CD(path_node.clone());
 
-                                path_node.goto(TreeCursor::home());
-                            } else {
-                                incubator_editor.write().unwrap().send_cmd_obj(obj);
-                                self.state = CommandState::Pipeline(incubator_editor);
-                            }
+                            path_node.goto(TreeCursor::home());
+                        } else {
+                            incubator_editor.write().unwrap().send_cmd_obj(obj);
+                            self.state = CommandState::Pipeline(incubator_editor);
+                        }
+                        TreeNavResult::Continue
                     }
                     _ => {
-                        self.sum_editor.send_cmd_obj(obj); 
+                        self.sum_editor.send_cmd_obj(obj)
                     }
                 }
             }
@@ -234,8 +235,10 @@ impl ObjCommander for Command {
                                 leaf_mode: ListCursorMode::Insert,
                                 tree_addr: vec![ 0, 0, -1 ]
                             });
+
+                            TreeNavResult::Continue
                         } else {
-                            self.sum_editor.send_cmd_obj(obj.clone());
+                            self.sum_editor.send_cmd_obj(obj.clone())
                         }
                     }
                     _ => {
@@ -247,16 +250,16 @@ impl ObjCommander for Command {
                                     .get_obj("PWD")
                                     .get_edit::<ListEditor>().unwrap();
                                 */
-                            let se = self.sum_editor.get_edit::<SumEditor>().unwrap();
-                            let mut se = se.write().unwrap();
+                                let se = self.sum_editor.get_edit::<SumEditor>().unwrap();
+                                let mut se = se.write().unwrap();
 
-                               let cwd_edit = self.cwd_node.get_edit::<ListEditor>().unwrap();
+                                let cwd_edit = self.cwd_node.get_edit::<ListEditor>().unwrap();
                                 let mut cwd_edit = cwd_edit.write().unwrap();
 
                                 let cd_path = path.get_data_view::<dyn SequenceView<Item = NestedNode>>(
                                     vec![
                                         "( List PathSegment )"
-                                   ].into_iter()
+                                    ].into_iter()
                                 ).unwrap();
 
                                 for segment in cd_path.iter() {
@@ -295,9 +298,11 @@ impl ObjCommander for Command {
                                 se.editors[0] = np;
                                 se.select(0);
                                 se.goto(TreeCursor::home());
+
+                                TreeNavResult::Continue
                             },
                             _ => {
-                                self.sum_editor.send_cmd_obj(obj); 
+                                self.sum_editor.send_cmd_obj(obj)
                             }
                         }
                     }
@@ -309,9 +314,11 @@ impl ObjCommander for Command {
                 match char_value {
                     Some('\n') => {
                         pipeline.write().unwrap().launch();
+                        TreeNavResult::Exit
                     },
                     _ => {
                         let mut p = pipeline.write().unwrap();
+
                         p.send_cmd_obj(obj);
 
                         if p.editor.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec![
@@ -321,6 +328,8 @@ impl ObjCommander for Command {
                             .len() == Some(0) {
                                 self.state = CommandState::Incubator(pipeline.clone());
                             }
+
+                        TreeNavResult::Continue
                     }
                 }
             }

@@ -12,7 +12,7 @@ use {
             TerminalView,
             widgets::ascii_box::AsciiBox
         },
-        tree::{NestedNode},
+        tree::{NestedNode, TreeNavResult},
         editors::list::*,
         type_system::{Context, MorphismType, MorphismTypePattern, TypeTerm}
     },
@@ -229,7 +229,7 @@ use nested::type_system::ReprTree;
 use nested::commander::ObjCommander;
 
 impl ObjCommander for PipelineLauncher {
-    fn send_cmd_obj(&mut self, cmd_obj: Arc<RwLock<ReprTree>>) {
+    fn send_cmd_obj(&mut self, cmd_obj: Arc<RwLock<ReprTree>>) -> TreeNavResult {
 
         let ctx = self.editor.ctx.clone().unwrap();
         let ctx = ctx.read().unwrap();
@@ -247,17 +247,18 @@ impl ObjCommander for PipelineLauncher {
                 
                 if c == '\n' {
                     self.launch();
+                    TreeNavResult::Exit
                 } else {
-                    self.editor.send_cmd_obj(cmd_obj);
+                    self.editor.send_cmd_obj(cmd_obj)
                 }
 
             } else {
                 drop(co);
-                self.editor.send_cmd_obj(cmd_obj);
+                self.editor.send_cmd_obj(cmd_obj)
             }            
         } else {
             drop(co);
-            self.editor.send_cmd_obj(cmd_obj);            
+            self.editor.send_cmd_obj(cmd_obj)
         }
     }
 }
