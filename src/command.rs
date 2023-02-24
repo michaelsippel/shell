@@ -64,10 +64,10 @@ impl Command {
             "Command",
             Arc::new(
                 |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth: usize| {
-                    let node = Command::new(ctx,
-                                            std::env::current_dir().unwrap()
-                                            .into_os_string().into_string().unwrap()
-                                            
+                    let node = Command::new(
+                        ctx,
+                        std::env::current_dir().unwrap()
+                            .into_os_string().into_string().unwrap()
                     ).into_node();
                     Some(node)
                 }
@@ -78,6 +78,7 @@ impl Command {
     pub fn into_node(self) -> NestedNode {
         self.sum_editor.clone()
             .set_view(self.comp_port.outer())
+            .set_diag(self.sum_editor.get_edit::<SumEditor>().unwrap().read().unwrap().editors[0].diag.clone().unwrap())
             .set_cmd(Arc::new(RwLock::new(self)))
     }
 
@@ -112,7 +113,11 @@ impl Command {
                  .map_item(|_idx, x| x.add_style_back(nested::utils::color::fg_style_from_depth(1)))
                 ),
                 (Point2::new(1, 0), nested::terminal::make_label("$ ")),
-                (Point2::new(3, 0), sum_editor.pty_view())
+                (Point2::new(3, 0), sum_editor.pty_view()),
+                (Point2::new(3, 1),
+                 incubator_node.get_edit::<PipelineLauncher>().unwrap()
+                 .read().unwrap()
+                 .get_type_view())
             ]
         );
 

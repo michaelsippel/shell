@@ -6,6 +6,7 @@ use {
             sequence::*,
         },
         buffer::{
+            vec::*,
             index_hashmap::*
         }
     },
@@ -13,29 +14,40 @@ use {
         terminal::{
             TerminalAtom, TerminalStyle,
             TerminalView,
-            widgets::ascii_box::AsciiBox
+            widgets::ascii_box::AsciiBox,
+            make_label
         },
         tree::{NestedNode, TreeNavResult},
         editors::list::*,
-        type_system::{Context, MorphismType, MorphismTypePattern, TypeTerm}
+        type_system::{Context, MorphismType, MorphismTypePattern, TypeTerm, TypeLadder}
     },
     std::sync::Arc,
     std::sync::RwLock,
-    std::io::{Read, Write}
+    std::io::{Read, Write},
+
+    cgmath::{Point2, Vector2},
+
+    crate::process_types::ProcessTypes
 };
 
 //<<<<>>>><<>><><<>><<<*>>><<>><><<>><<<<>>>>
 
 pub struct PipelineLauncher {
     pub editor: NestedNode,
-
     pub cwd: Option<String>,
+
+    pub types: Arc<RwLock<ProcessTypes>>,
 
     _ptybox: Arc<RwLock<AsciiBox>>,
     pub box_port: ViewPort<dyn TerminalView>,
     suspended: bool,
 
     pty_port: ViewPort<dyn TerminalView>,
+
+    typegrid: IndexBuffer<Point2<i16>, OuterViewPort<dyn TerminalView>>,
+    typeinfo_port: OuterViewPort<dyn TerminalView>,
+
+    diag_buf: VecBuffer<nested::diagnostics::Message>,
 
     comp_port: ViewPort<dyn TerminalView>,
     _compositor: Arc<RwLock<nested::terminal::TerminalCompositor>>,
@@ -66,6 +78,9 @@ impl PipelineLauncher {
                     let pipeline_launcher = crate::pipeline::PipelineLauncher::new(node.clone());
                     
                     node.view = Some(pipeline_launcher.editor_view());
+                    node.diag = Some(pipeline_launcher.diag_buf
+                                     .get_port()
+                                     .to_sequence());
 
                     let editor = Arc::new(RwLock::new(pipeline_launcher));
                     node.cmd = Some(editor.clone());
@@ -102,6 +117,11 @@ impl PipelineLauncher {
         let box_port = ViewPort::<dyn TerminalView>::new();
         let compositor = nested::terminal::TerminalCompositor::new(comp_port.inner());
 
+        let mut typegrid = IndexBuffer::new();
+        let typeinfo_port = typegrid.get_port().flatten();
+
+        let mut diag_buf = VecBuffer::new();
+
         compositor.write().unwrap().push(
             box_port
                 .outer()
@@ -111,6 +131,8 @@ impl PipelineLauncher {
             editor.view.clone().unwrap()
                 .map_item(|_idx, x| x.add_style_back(TerminalStyle::fg_color((220, 220, 0)))),
         );
+
+        let ctx = editor.ctx.clone().unwrap();
 
         PipelineLauncher {
             editor,
@@ -127,11 +149,13 @@ impl PipelineLauncher {
             box_port,
             cwd: None,
             _compositor: compositor,
-        }
-    }
 
-    pub fn clear_pty(&mut self) {
-        
+            typegrid,
+            types: Arc::new(RwLock::new(ProcessTypes::new(ctx))),
+            typeinfo_port,
+
+            diag_buf
+        }
     }
 
     pub fn pty_view(&self) -> OuterViewPort<dyn TerminalView> {
@@ -140,6 +164,10 @@ impl PipelineLauncher {
 
     pub fn editor_view(&self) -> OuterViewPort<dyn TerminalView> {
         self.editor.get_view()
+    }
+
+    pub fn get_type_view(&self) -> OuterViewPort<dyn TerminalView> {
+        self.typeinfo_port.clone()
     }
 
     pub fn get_strings(&self) -> Vec<Vec<String>> {
@@ -178,11 +206,58 @@ impl PipelineLauncher {
     }
 
     pub fn launch(&mut self) {
+        self.pty_reset();
         let strings = self.get_strings();
+
+        let ctx = self.editor.ctx.clone().unwrap();
+
+        let types = self.types.read().unwrap();
+        let mut last_stdout_type : Option<TypeLadder> = None;
+
+        for (j, process_str) in strings.iter().enumerate() {
+            if process_str.len() > 0 { 
+                if let (Some(last_stdout), Some(expected)) = (last_stdout_type, types.get_stdin_type( &process_str )) {
+                    // todo
+                    if last_stdout != expected {
+
+                        let mut grid = IndexBuffer::new();
+
+                        grid.insert(Point2::new(0, 1), make_label("got:"));
+                        grid.insert(Point2::new(1, 1), make_label("expected:"));
+
+                        for (i,t) in last_stdout.iter().enumerate() {
+                            let tstr = ctx.read().unwrap().type_term_to_str( t );
+                            grid.insert(Point2::new(0, 2+i as i16), make_label(&tstr));
+                        }
+
+                        for (i,t) in expected.iter().enumerate() {
+                            let tstr = ctx.read().unwrap().type_term_to_str( t );
+                            grid.insert(Point2::new(1, 2+i as i16), make_label(&tstr));
+                        }
+                        
+                        self.diag_buf.push(nested::diagnostics::make_error(
+                            grid.get_port().flatten()
+                        ));
+
+                        return;
+                    }
+                }
+
+                last_stdout_type = types.get_stdout_type( &process_str );
+/*
+                if let Some(typeladder) = last_stdout_type.as_ref() {
+                    for (i,t) in typeladder.iter().enumerate() {
+                        let tstr = ctx.read().unwrap().type_term_to_str( t );
+                        self.typegrid.insert(Point2::new(1+j as i16, i as i16), make_label(&tstr));
+                    }
+            }
+                */
+            }
+        }
 
         let mut execs = Vec::new();
         for process_str in strings {
-            if process_str.len() > 0 {
+            if process_str.len() > 0 {                 
                 let mut exec = subprocess::Exec::cmd(process_str[0].clone());
 
                 if let Some(cwd) = self.cwd.as_ref() {
@@ -223,6 +298,8 @@ impl PipelineLauncher {
     }
 
     pub fn pty_reset(&mut self) {
+        self.diag_buf.clear();
+        self.typegrid.clear();
         let mut empty = IndexBuffer::new();
         self.pty_port.set_view(empty.get_port().get_view());
     }

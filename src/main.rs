@@ -8,6 +8,8 @@ mod process;
 mod pipeline;
 mod command;
 
+mod process_types;
+
 use {
     cgmath::{Point2, Vector2},
     r3vi::{
