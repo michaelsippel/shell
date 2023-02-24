@@ -9,14 +9,15 @@ use {
     },
     nested::{
         editors::{
-            list::{ListCursorMode},  
+            list::{ListCursorMode, ListEditor, PTYListEditor}
         },
         terminal::{
             TerminalAtom, TerminalEditor, TerminalEvent, TerminalStyle,
             TerminalView,
             widgets::ascii_box::AsciiBox
         },
-        tree::{TreeCursor, TreeNav, NestedNode}
+        tree::{TreeCursor, TreeNav, NestedNode},
+        type_system::{Context, TypeTerm, MorphismTypePattern}
     },
     std::sync::Arc,
     std::sync::RwLock,
@@ -39,6 +40,100 @@ pub struct ProcessLauncher {
 }
 
 impl ProcessLauncher {
+    pub fn init_ctx(ctx: &mut Context) {
+        ctx.add_list_typename("ProcessArg".into());
+        ctx.add_morphism(
+            MorphismTypePattern {
+                src_tyid: ctx.get_typeid("List"),
+                dst_tyid: ctx.get_typeid("ProcessArg").unwrap()
+            },
+            Arc::new(
+                |mut node, _dst_type:_| {
+                    let depth = node.depth;
+                    let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
+                    let pty_editor = PTYListEditor::from_editor(
+                        editor,
+                        None,
+                        depth+1
+                    );
+
+                    node.view = Some(pty_editor.pty_view(("","","")));
+                    node.cmd = Some(Arc::new(RwLock::new(pty_editor)));
+                    Some(node)                
+                }
+            )
+        );
+        
+        ctx.add_node_ctor(
+            "ProcessArg", Arc::new(
+                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth: usize| {
+                    let mut node = Context::make_node(
+                        &ctx,
+                        TypeTerm::Type {
+                            id: ctx.read().unwrap().get_typeid("List").unwrap(),
+                            args: vec![
+                                TypeTerm::new(ctx.read().unwrap().get_typeid("Char").unwrap())
+                            ]
+                        },
+                        depth+1
+                    ).unwrap();
+
+                    node = node.morph(dst_typ);
+
+                    Some(node)
+                }
+            )
+        );
+
+
+        ctx.add_list_typename("Process".into());
+        ctx.add_morphism(
+            MorphismTypePattern {
+                src_tyid: ctx.get_typeid("List"),
+                dst_tyid: ctx.get_typeid("Process").unwrap()
+            },
+            Arc::new(
+                |mut node, _dst_type:_| {
+                    let depth = node.depth;
+                    let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
+                    let pty_editor = PTYListEditor::from_editor(
+                        editor,
+                        Some(' '),
+                        depth+1
+                    );
+
+                    node.view = Some(pty_editor.pty_view( ("", " ", "") ));
+                    node.cmd = Some(Arc::new(RwLock::new(pty_editor)));
+
+                    let _process_launcher = crate::process::ProcessLauncher::new(node.clone());
+                    Some(node)
+                }
+            )
+        );
+
+        ctx.add_node_ctor(
+            "Process",
+            Arc::new(
+                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth: usize| {
+                    let mut node = Context::make_node(
+                        &ctx,
+                        TypeTerm::Type {
+                            id: ctx.read().unwrap().get_typeid("List").unwrap(),
+                            args: vec![
+                                TypeTerm::new(ctx.read().unwrap().get_typeid("ProcessArg").unwrap())
+                            ]
+                        },
+                        depth+1
+                    ).unwrap();
+
+                    node = node.morph(dst_typ);
+
+                    Some(node)
+                }
+            )
+        );
+    }
+
     pub fn new(
         cmd_editor: NestedNode
     ) -> Self {

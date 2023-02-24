@@ -2,8 +2,8 @@ extern crate portable_pty;
 extern crate r3vi;
 
 mod incubator;
-mod morphisms;
 mod pty;
+mod path;
 mod process;
 mod pipeline;
 mod command;
@@ -26,8 +26,15 @@ use {
     termion::event::{Event, Key},
 };
 
-macro_rules! typeterm {
-    ($ctx:ident, $s:expr) => { $ctx.read().unwrap().type_term_from_str($s).unwrap() }
+pub fn init_os_ctx(parent: Arc<RwLock<Context>>) -> Arc<RwLock<Context>> {
+    let ctx = Arc::new(RwLock::new(Context::with_parent(Some(parent))));
+
+    crate::path::init_ctx(&mut ctx.write().unwrap());
+    crate::process::ProcessLauncher::init_ctx(&mut ctx.write().unwrap());
+    crate::pipeline::PipelineLauncher::init_ctx(&mut ctx.write().unwrap());
+    crate::command::Command::init_ctx(&mut ctx.write().unwrap());
+
+    ctx
 }
 
 #[async_std::main]
@@ -60,7 +67,7 @@ async fn main() {
     let ctx = nested::type_system::init_mem_ctx(ctx);
     let ctx = nested::type_system::init_editor_ctx(ctx);
     let ctx = nested::type_system::init_math_ctx(ctx);
-    let ctx = crate::morphisms::init_os_ctx(ctx);
+    let ctx = init_os_ctx(ctx);
 
     let c = ctx.clone();
 

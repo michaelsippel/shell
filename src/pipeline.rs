@@ -12,7 +12,9 @@ use {
             TerminalView,
             widgets::ascii_box::AsciiBox
         },
-        tree::{NestedNode}
+        tree::{NestedNode},
+        editors::list::*,
+        type_system::{Context, MorphismType, MorphismTypePattern, TypeTerm}
     },
     std::sync::Arc,
     std::sync::RwLock,
@@ -35,6 +37,58 @@ pub struct PipelineLauncher {
 }
 
 impl PipelineLauncher {
+    pub fn init_ctx(ctx: &mut Context) {
+        ctx.add_list_typename("Pipeline".into());
+
+        ctx.add_morphism(
+            MorphismTypePattern {
+                src_tyid: ctx.get_typeid("List"),
+                dst_tyid: ctx.get_typeid("Pipeline").unwrap()
+            },
+            Arc::new(
+                |mut node, _dst_type:_| {
+                    let depth = node.depth;
+                    let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
+                    let pty_editor = PTYListEditor::from_editor(
+                        editor,
+                        Some('|'),
+                        depth
+                    );
+
+                    node.view = Some(pty_editor.pty_view((""," | ","")));
+                    node.cmd = Some(Arc::new(RwLock::new(pty_editor)));
+
+                    let pipeline_launcher = crate::pipeline::PipelineLauncher::new(node.clone());
+                    
+                    node.view = Some(pipeline_launcher.editor_view());
+
+                    let editor = Arc::new(RwLock::new(pipeline_launcher));
+                    node.cmd = Some(editor.clone());
+                    node.editor = Some(editor.clone());
+
+                    Some(node)                
+                }
+            )
+        );
+
+        ctx.add_node_ctor(
+            "Pipeline",
+            Arc::new(
+                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth: usize| {
+                    let mut node = Context::make_node(
+                        &ctx,
+                        (&ctx, "( List Process )").into(),
+                        depth+1
+                    ).unwrap();
+
+                    node = node.morph(dst_typ);
+
+                    Some(node)
+                }
+            )
+        );
+    }
+    
     pub fn new(
         editor: NestedNode
     ) -> PipelineLauncher {
@@ -62,12 +116,16 @@ impl PipelineLauncher {
                 }),
                 box_port.inner(),
             ),
-            suspended: false,
             pty_port,
+            suspended: false,
             comp_port,
             box_port,
             _compositor: compositor,
         }
+    }
+
+    pub fn clear_pty(&mut self) {
+        
     }
 
     pub fn pty_view(&self) -> OuterViewPort<dyn TerminalView> {
@@ -121,6 +179,7 @@ impl PipelineLauncher {
         for process_str in strings {
             if process_str.len() > 0 {
                 let mut process = std::process::Command::new(process_str[0].clone());
+
                 if last_output.is_some() {
                     process.stdin(std::process::Stdio::piped());
                 }
