@@ -15,7 +15,8 @@ use {
             TerminalAtom, TerminalStyle,
             TerminalView,
             widgets::ascii_box::AsciiBox,
-            make_label
+            make_label,
+            TerminalProjections
         },
         tree::{NestedNode, TreeNavResult},
         editors::list::*,
@@ -85,7 +86,6 @@ impl PipelineLauncher {
                     let editor = Arc::new(RwLock::new(pipeline_launcher));
                     node.cmd = Some(editor.clone());
                     node.editor = Some(editor.clone());
-
                     Some(node)                
                 }
             )
@@ -205,8 +205,7 @@ impl PipelineLauncher {
         pipeline_strings
     }
 
-    pub fn launch(&mut self) {
-        self.pty_reset();
+    pub fn typecheck(&mut self) -> bool {
         let strings = self.get_strings();
 
         let ctx = self.editor.ctx.clone().unwrap();
@@ -214,85 +213,139 @@ impl PipelineLauncher {
         let types = self.types.read().unwrap();
         let mut last_stdout_type : Option<TypeLadder> = None;
 
+        let types = self.types.read().unwrap();
+        let mut last_stdout_type : Option<TypeLadder> = None;
+
         for (j, process_str) in strings.iter().enumerate() {
             if process_str.len() > 0 { 
                 if let (Some(last_stdout), Some(expected)) = (last_stdout_type, types.get_stdin_type( &process_str )) {
+
                     // todo
-                    if last_stdout != expected {
+                    match last_stdout.is_matching_repr(&expected) {
+                        Ok(x) => {
+                            let mut grid = IndexBuffer::new();
+                            grid.insert(Point2::new(0 as i16, 0 as i16), make_label("matching types. ").with_style(TerminalStyle::bold(true)));
+                            grid.insert(Point2::new(1 as i16, 0 as i16), make_label("found ").with_style(TerminalStyle::bold(true)));
 
-                        let mut grid = IndexBuffer::new();
+                            for (i,t) in last_stdout.0.iter().enumerate() {
+                                let tstr = ctx.read().unwrap().type_term_to_str( t );
+                                grid.insert(Point2::new(1, 1+i as i16), make_label(&tstr));
+                            }
 
-                        grid.insert(Point2::new(0, 1), make_label("got:"));
-                        grid.insert(Point2::new(1, 1), make_label("expected:"));
+                            grid.insert(Point2::new(3, 0), make_label(" expected ").with_style(TerminalStyle::bold(true)));
+                            grid.insert(Point2::new(2, 1 as i16 + x as i16), make_label("<===>").map_item(|x,a| a.add_style_back(TerminalStyle::fg_color((50,200,50)))));
 
-                        for (i,t) in last_stdout.iter().enumerate() {
-                            let tstr = ctx.read().unwrap().type_term_to_str( t );
-                            grid.insert(Point2::new(0, 2+i as i16), make_label(&tstr));
+                            for (i,t) in expected.0.iter().enumerate() {
+                                let tstr = ctx.read().unwrap().type_term_to_str( t );
+                                grid.insert(Point2::new(3, 1 as i16 + x as i16 +i as i16), make_label(&tstr));
+                            }
+
+                            self.diag_buf.push({
+                                let mut msg = nested::diagnostics::make_info(
+                                    grid.get_port().flatten()
+                                );
+                                msg.addr.push(j);
+                                msg
+                            });
                         }
+                        Err(x) => {
+                            let mut grid = IndexBuffer::new();
+                            grid.insert(Point2::new(0 as i16, 0 as i16), make_label("type error. ").with_style(TerminalStyle::bold(true)));
+                            grid.insert(Point2::new(1 as i16, 0 as i16), make_label("found").with_style(TerminalStyle::bold(true)));
 
-                        for (i,t) in expected.iter().enumerate() {
-                            let tstr = ctx.read().unwrap().type_term_to_str( t );
-                            grid.insert(Point2::new(1, 2+i as i16), make_label(&tstr));
+                            for (i,t) in last_stdout.0.iter().enumerate() {
+                                let tstr = ctx.read().unwrap().type_term_to_str( t );
+                                grid.insert(Point2::new(1, 1+i as i16), make_label(&tstr));
+                            }
+
+                            grid.insert(Point2::new(3, 0), make_label("expected").with_style(TerminalStyle::bold(true)));
+
+                            grid.insert(Point2::new(2, 1 as i16 + x.unwrap_or(0) as i16), make_label("<=!=>").map_item(|x,a| a.add_style_back(TerminalStyle::fg_color((200,50,50)))));
+
+                            for (i,t) in expected.0.iter().enumerate() {
+                                let tstr = ctx.read().unwrap().type_term_to_str( t );
+                                grid.insert(Point2::new(3, 1 as i16 + x.unwrap_or(0) as i16 +i as i16), make_label(&tstr));
+                            }
+
+                            self.diag_buf.push({
+                                let mut msg = nested::diagnostics::make_error(
+                                    grid.get_port().flatten()
+                                );
+                                msg.addr.push(j);
+                                msg
+                            });                            
+
+                            return false;
                         }
-                        
-                        self.diag_buf.push(nested::diagnostics::make_error(
-                            grid.get_port().flatten()
-                        ));
-
-                        return;
                     }
+                } else if j > 0 {                    
+                    self.diag_buf.push({
+                        let mut msg = nested::diagnostics::make_warn(
+                            make_label("could not check, missing typeinfo")
+                        );
+                        msg.addr.push(j);
+                        msg
+                    });
                 }
 
                 last_stdout_type = types.get_stdout_type( &process_str );
-/*
-                if let Some(typeladder) = last_stdout_type.as_ref() {
-                    for (i,t) in typeladder.iter().enumerate() {
-                        let tstr = ctx.read().unwrap().type_term_to_str( t );
-                        self.typegrid.insert(Point2::new(1+j as i16, i as i16), make_label(&tstr));
+            }
+        }
+
+        self.diag_buf.push(nested::diagnostics::make_info(
+            make_label("type check ok")
+        ));
+
+        true
+    }
+
+    pub fn launch(&mut self) {
+        self.pty_reset();
+
+        self.typecheck();
+
+        {
+            let strings = self.get_strings();
+
+            let mut execs = Vec::new();
+            for process_str in strings {
+                if process_str.len() > 0 {                 
+                    let mut exec = subprocess::Exec::cmd(process_str[0].clone());
+
+                    if let Some(cwd) = self.cwd.as_ref() {
+                        exec = exec.cwd(cwd);
                     }
-            }
-                */
-            }
-        }
 
-        let mut execs = Vec::new();
-        for process_str in strings {
-            if process_str.len() > 0 {                 
-                let mut exec = subprocess::Exec::cmd(process_str[0].clone());
-
-                if let Some(cwd) = self.cwd.as_ref() {
-                    exec = exec.cwd(cwd);
+                    for i in 1..process_str.len() {
+                        exec = exec.arg(process_str[i].clone());
+                    }
+                    execs.push(exec);
                 }
+            }
 
-                for i in 1..process_str.len() {
-                    exec = exec.arg(process_str[i].clone());
+            if execs.len() > 1 {
+                let pipeline = subprocess::Pipeline::from_exec_iter(execs);
+
+                if let Ok(mut stdout) = pipeline.stream_stdout() {
+                    let max_size = cgmath::Vector2::new(80, 40);
+
+                    let port = self.pty_port.inner();
+
+                    async_std::task::spawn_blocking(move || {
+                        nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
+                    });
                 }
-                execs.push(exec);
-            }
-        }
+            } else if execs.len() == 1 {
+                let e = execs[0].clone();
+                if let Ok(mut stdout) = e.stream_stdout() {
+                    let max_size = cgmath::Vector2::new(80, 40);
 
-        if execs.len() > 1 {
-            let pipeline = subprocess::Pipeline::from_exec_iter(execs);
+                    let port = self.pty_port.inner();
 
-            if let Ok(mut stdout) = pipeline.stream_stdout() {
-                let max_size = cgmath::Vector2::new(80, 40);
-
-                let port = self.pty_port.inner();
-
-                async_std::task::spawn_blocking(move || {
-                    nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
-                });
-            }
-        } else if execs.len() == 1 {
-            let e = execs[0].clone();
-            if let Ok(mut stdout) = e.stream_stdout() {
-                let max_size = cgmath::Vector2::new(80, 40);
-
-                let port = self.pty_port.inner();
-
-                async_std::task::spawn_blocking(move || {
-                    nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
-                });
+                    async_std::task::spawn_blocking(move || {
+                        nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
+                    });
+                }
             }
         }
     }
@@ -318,7 +371,6 @@ impl ObjCommander for PipelineLauncher {
         let cmd_type = co.get_type().clone();
         let _term_event_type = ctx.type_term_from_str("( TerminalEvent )").unwrap();
         let char_type = ctx.type_term_from_str("( Char )").unwrap();
-
 
         if cmd_type == char_type {
             if let Some(cmd_view) = co.get_view::<dyn SingletonView<Item = char>>() {
