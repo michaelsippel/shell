@@ -197,10 +197,14 @@ impl PipelineLauncher {
                     }
                 }
 
-                process_strings.push(arg);
+                if arg.len() > 0 {
+                    process_strings.push(arg);
+                }
             }
 
-            pipeline_strings.push(process_strings);
+            if process_strings.len() > 0 {
+                pipeline_strings.push(process_strings);
+            }
         }
 
         pipeline_strings
