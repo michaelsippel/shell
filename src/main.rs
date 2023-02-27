@@ -8,7 +8,6 @@ mod process;
 mod pipeline;
 mod command;
 mod process_types;
-
 mod interactive;
 
 use {
@@ -73,35 +72,12 @@ async fn main() {
 
         let view_port = node.view.clone().unwrap();
         view_port.0.update();
-        /*
-            let view = view_port.get_view();
 
-            match view.area() {
-                IndexArea::Range(r) => {
-                    for pos in GridWindowIterator::from(r) {
-                        if let Some(atom) = view.get(&pos) {
-                            print!(
-                                "{}{}",
-                                atom.style,
-                                atom.c.unwrap_or(' ')
-                            );
-                        }
-                    }
-                }
-                area => {
-                    eprintln!("area: {:?}", area);
-                }
-            }
-
-*/        
-        //pipeline.pty_view().0.update();
         let pipeline = node.get_edit::<PipelineLauncher>().unwrap();
         let mut pipeline = pipeline.write().unwrap();
         pipeline.typecheck();
 
         let diagnostics_port = node.diag.unwrap();
-        //diagnostics_port.0.update();
-
         for message in diagnostics_port.get_view().unwrap().iter() {
             for x in message.addr.iter() {
                 print!("{}.", x);

@@ -6,13 +6,14 @@ use {
             singleton::*,
             sequence::*,
         },
-        buffer::index_hashmap::*
+        buffer::index_hashmap::*,
+        projection::decorate_sequence::Separate
     },
     nested::{
         editors::{list::{ListEditor, ListCursorMode}, sum::SumEditor},
         terminal::{
             TerminalAtom, TerminalStyle, TerminalView,
-            widgets::ascii_box::AsciiBox, TerminalEvent
+            widgets::ascii_box::AsciiBox, TerminalEvent, make_label
         },
         tree::{NestedNode, TreeNav, TreeCursor, TreeNavResult},
         type_system::{Context, ReprTree, TypeTerm},
@@ -83,7 +84,7 @@ impl Command {
     }
 
     pub fn new(ctx: Arc<RwLock<Context>>, cwd: String) -> Self {
-        let mut cwd_node = Context::make_node(&ctx, (&ctx, "( Path )").into(), 1).unwrap();
+        let mut cwd_node = Context::make_node(&ctx, (&ctx, "( Path )").into(), 2).unwrap();
 
         cwd_node.goto(TreeCursor::home());
         for c in cwd.chars() {
@@ -97,7 +98,7 @@ impl Command {
 
         let mut grid = IndexBuffer::new();
         let mut incubator_node = Context::make_node(&ctx, (&ctx, "( Pipeline )").into(), 2).unwrap();
-        let mut path_node = Context::make_node(&ctx, (&ctx, "( Path )").into(), 1).unwrap();
+        let mut path_node = Context::make_node(&ctx, (&ctx, "( Path )").into(), 2).unwrap();
 
         let mut sum_editor = SumEditor::new(
             vec![

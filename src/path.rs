@@ -68,7 +68,7 @@ pub fn init_ctx(ctx: &mut Context) {
                     depth+1
                 );
 
-                node.view = Some(pty_editor.pty_view(("<","/",">")));
+                node.view = Some(pty_editor.pty_view(("","/","")));
                 node.cmd = Some(Arc::new(RwLock::new(pty_editor)));
                 Some(node)                
             }

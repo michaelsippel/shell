@@ -263,6 +263,14 @@ impl PipelineLauncher {
                             });
                         }
                         Err(x) => {
+
+                            let (first_match, first_mismatch) = match x {
+                                Some((first_match, first_mismatch)) => {
+                                    (Some(first_match), Some(first_mismatch))
+                                }
+                                None => (None, None)
+                            };
+
                             let mut grid = IndexBuffer::new();
                             grid.insert(Point2::new(0 as i16, 0 as i16), make_label("type error. ").with_style(TerminalStyle::bold(true)));
                             grid.insert(Point2::new(0 as i16, 1 as i16), make_label("found").with_style(TerminalStyle::bold(true)));
@@ -274,11 +282,11 @@ impl PipelineLauncher {
 
                             grid.insert(Point2::new(2, 1), make_label("expected").with_style(TerminalStyle::bold(true)));
 
-                            grid.insert(Point2::new(1, 2 as i16 + x.unwrap_or(0) as i16), make_label("<=!=>").with_fg_color((200,50,50)));
+                            grid.insert(Point2::new(1, 2 as i16 + first_match.unwrap_or(0) as i16 + first_mismatch.unwrap_or(0) as i16), make_label("<=!=>").with_fg_color((200,50,50)));
 
                             for (i,t) in expected.0.iter().enumerate() {
                                 let tstr = ctx.read().unwrap().type_term_to_str( t );
-                                grid.insert(Point2::new(2, 2 as i16 + x.unwrap_or(0) as i16 +i as i16), make_label(&tstr).with_fg_color((160,160,20)));
+                                grid.insert(Point2::new(2, 2 as i16 + first_match.unwrap_or(0) as i16 + i as i16), make_label(&tstr).with_fg_color((160,160,20)));
                             }
 
                             self.diag_buf.push({
@@ -289,6 +297,9 @@ impl PipelineLauncher {
                                 msg
                             });                            
 
+                            return false;
+                        }
+                        Err(None) => {
                             return false;
                         }
                     }

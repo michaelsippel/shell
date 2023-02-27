@@ -68,7 +68,6 @@ pub async fn tui_repl(ctx: Arc<RwLock<Context>>) {
         let mut cur_size = SingletonBuffer::new(Vector2::new(10, 10));
 
         table.insert_iter(vec![
-            (Point2::new(0, 0), magic.clone()),
             (Point2::new(0, 1), cursor_widget),
             (Point2::new(0, 2), magic.clone()),
             (Point2::new(0, 3), make_label(" ")),
@@ -79,20 +78,7 @@ pub async fn tui_repl(ctx: Arc<RwLock<Context>>) {
                  |(n, segment)| {
                      let mut buf = IndexBuffer::new();
                      buf.insert_iter(vec![
-                         (Point2::new(0, 0),
-                          make_label(match n+1 {
-                              1 => "I) ",
-                              2 => "II) ",
-                              3 => "III) ",
-                              4 => "IV) ",
-                              5 => "V) ",
-                              6 => "VI) ",
-                              7 => "VII) ",
-                              8 => "IIX) ",
-                              9 => "IX) ",
-                              10 => "X) ",
-                              _ => ""
-                          })),
+                         (Point2::new(0, 0), make_label(&format!("[{}]", n))),
                          (Point2::new(1, 0), segment.clone())
                      ]);
 
