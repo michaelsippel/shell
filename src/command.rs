@@ -297,6 +297,8 @@ impl ObjCommander for Command {
                                     ].into_iter()
                                 ).unwrap();
 
+                                let mut cd_path_str = String::new();
+
                                 for segment in cd_path.iter() {
                                     let mut node = segment.clone();
                                     node.goto(TreeCursor::none());
@@ -309,8 +311,9 @@ impl ObjCommander for Command {
                                         let char_view = char_node.get_data_view::<dyn SingletonView<Item = Option<char>>>(vec![].into_iter());
                                         if let Some(c) = char_view.get() {
                                             arg.push(c);
-                                        }
 
+                                            cd_path_str.push(c)
+                                        }
                                     }
 
                                     if arg.len() > 0 {
@@ -321,9 +324,13 @@ impl ObjCommander for Command {
                                             cwd_edit.data.push(node);
                                         }
                                     }
+
+                                    cd_path_str.push('/');
                                 }
 
-                                se.editors[1] = Context::make_node(&self.ctx, (&self.ctx, "( Path )").into(), 1).unwrap();
+                                std::env::set_current_dir(std::path::Path::new(&cd_path_str));
+                                
+                                se.editors[1] = Context::make_node(&self.ctx, (&self.ctx, "( Path )").into(), 2).unwrap();
 
                                 let pipeline_editor = se.editors[0].get_edit::<PipelineLauncher>().unwrap();
                                 pipeline_editor.write().unwrap().cwd = Some(self.get_cwd_string());
