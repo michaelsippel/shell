@@ -331,8 +331,7 @@ impl PipelineLauncher {
     pub fn launch(&mut self) {
         self.pty_reset();
 
-        self.typecheck();
-
+        if self.typecheck()
         {
             let strings = self.get_strings();
 

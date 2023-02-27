@@ -1,0 +1,56 @@
+::wc -l
+>0: ( Seq ( Seq Char ) )~( Seq Char )
+
+::wc -[cmlw]
+<1: ( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
+>0: ( Seq Char )
+
+::seq [0-9]*
+<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+
+::sort -n\(\| .*\)
+>0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+
+::sort\(\| .*\)
+>0: ( Seq ( Seq Char ) )~( Seq Char )
+<1: ( Seq ( Seq Char ) )~( Seq Char )
+
+::\(head\|tail\)\(\| .*\)
+>0: ( Seq ( Seq Char ) )~( Seq Char )
+<1: ( Seq ( Seq Char ) )~( Seq Char )
+
+::ls\(\| .*\)
+<1: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+
+::find\(\| .*\)
+<1: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+
+::xargs expr [0-9]* \(+\|-\|\*\|/\)
+>0: ( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
+<1: ( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
+
+::xargs -n 1 expr [0-9]* \(+\|-\|\*\|/\)
+>0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+
+::stat -c %[WXYZ] [a-z/]*
+<1: ( Date )~( TimeSinceEpoch )~( Duration Seconds )~( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
+
+::stat -c %[wxyz] [a-z/]*
+<1: ( Date )~( ISO-8601 )~( Seq Char )
+
+::xargs stat -c %[WXYZ]
+>0: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+<1: ( Seq Date )~( Seq TimeSinceEpoch )~( Seq ( Duration Seconds ) )~( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )
+
+::xargs stat -c %[wxyz]
+>0: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+<1: ( Seq Date )~( Seq ISO-8601 )~( Seq ( Seq Char ) )
+
+::date +%s
+<1: ( Date )~( TimeSinceEpoch )~( Duration Seconds )~( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
+
+::rev
+>0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+<1: ( Seq ℕ )~( Seq ( PosInt 10 LittleEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
