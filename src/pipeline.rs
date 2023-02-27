@@ -4,6 +4,7 @@ use {
             OuterViewPort, ViewPort,
             singleton::*,
             sequence::*,
+            port::UpdateTask
         },
         buffer::{
             vec::*,
@@ -208,6 +209,13 @@ impl PipelineLauncher {
     pub fn typecheck(&mut self) -> bool {
         let strings = self.get_strings();
 
+        if strings.len() == 0 {
+            self.diag_buf.push(nested::diagnostics::make_warn(
+                make_label("empty pipeline")
+            ));
+            return false;
+        }
+
         let ctx = self.editor.ctx.clone().unwrap();
 
         let types = self.types.read().unwrap();
@@ -225,19 +233,25 @@ impl PipelineLauncher {
                         Ok(x) => {
                             let mut grid = IndexBuffer::new();
                             grid.insert(Point2::new(0 as i16, 0 as i16), make_label("matching types. ").with_style(TerminalStyle::bold(true)));
-                            grid.insert(Point2::new(1 as i16, 0 as i16), make_label("found ").with_style(TerminalStyle::bold(true)));
+                            grid.insert(Point2::new(0 as i16, 1 as i16), make_label("found").with_style(TerminalStyle::bold(true)));
 
                             for (i,t) in last_stdout.0.iter().enumerate() {
                                 let tstr = ctx.read().unwrap().type_term_to_str( t );
-                                grid.insert(Point2::new(1, 1+i as i16), make_label(&tstr));
+                                grid.insert(Point2::new(0, 2+i as i16), make_label(&tstr).with_fg_color(
+                                    if i < x {
+                                        (120,120,120)
+                                    } else {
+                                        (160, 160, 20)
+                                    }
+                                ));
                             }
 
-                            grid.insert(Point2::new(3, 0), make_label(" expected ").with_style(TerminalStyle::bold(true)));
-                            grid.insert(Point2::new(2, 1 as i16 + x as i16), make_label("<===>").map_item(|x,a| a.add_style_back(TerminalStyle::fg_color((50,200,50)))));
+                            grid.insert(Point2::new(2, 1), make_label("expected").with_style(TerminalStyle::bold(true)));
+                            grid.insert(Point2::new(1, 2 as i16 + x as i16), make_label("<===>").map_item(|x,a| a.add_style_back(TerminalStyle::fg_color((50,200,50)))));
 
                             for (i,t) in expected.0.iter().enumerate() {
                                 let tstr = ctx.read().unwrap().type_term_to_str( t );
-                                grid.insert(Point2::new(3, 1 as i16 + x as i16 +i as i16), make_label(&tstr));
+                                grid.insert(Point2::new(2, 2 as i16 + x as i16 +i as i16), make_label(&tstr).with_fg_color((160,160,20)));
                             }
 
                             self.diag_buf.push({
@@ -251,20 +265,20 @@ impl PipelineLauncher {
                         Err(x) => {
                             let mut grid = IndexBuffer::new();
                             grid.insert(Point2::new(0 as i16, 0 as i16), make_label("type error. ").with_style(TerminalStyle::bold(true)));
-                            grid.insert(Point2::new(1 as i16, 0 as i16), make_label("found").with_style(TerminalStyle::bold(true)));
+                            grid.insert(Point2::new(0 as i16, 1 as i16), make_label("found").with_style(TerminalStyle::bold(true)));
 
                             for (i,t) in last_stdout.0.iter().enumerate() {
                                 let tstr = ctx.read().unwrap().type_term_to_str( t );
-                                grid.insert(Point2::new(1, 1+i as i16), make_label(&tstr));
+                                grid.insert(Point2::new(0, 2+i as i16), make_label(&tstr).with_fg_color((160,160,20)));
                             }
 
-                            grid.insert(Point2::new(3, 0), make_label("expected").with_style(TerminalStyle::bold(true)));
+                            grid.insert(Point2::new(2, 1), make_label("expected").with_style(TerminalStyle::bold(true)));
 
-                            grid.insert(Point2::new(2, 1 as i16 + x.unwrap_or(0) as i16), make_label("<=!=>").map_item(|x,a| a.add_style_back(TerminalStyle::fg_color((200,50,50)))));
+                            grid.insert(Point2::new(1, 2 as i16 + x.unwrap_or(0) as i16), make_label("<=!=>").with_fg_color((200,50,50)));
 
                             for (i,t) in expected.0.iter().enumerate() {
                                 let tstr = ctx.read().unwrap().type_term_to_str( t );
-                                grid.insert(Point2::new(3, 1 as i16 + x.unwrap_or(0) as i16 +i as i16), make_label(&tstr));
+                                grid.insert(Point2::new(2, 2 as i16 + x.unwrap_or(0) as i16 +i as i16), make_label(&tstr).with_fg_color((160,160,20)));
                             }
 
                             self.diag_buf.push({
@@ -376,14 +390,13 @@ impl ObjCommander for PipelineLauncher {
             if let Some(cmd_view) = co.get_view::<dyn SingletonView<Item = char>>() {
                 drop(co);
                 let c = cmd_view.get();
-                
+
                 if c == '\n' {
                     self.launch();
                     TreeNavResult::Exit
                 } else {
                     self.editor.send_cmd_obj(cmd_obj)
                 }
-
             } else {
                 drop(co);
                 self.editor.send_cmd_obj(cmd_obj)
