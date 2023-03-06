@@ -1,7 +1,7 @@
 ::wc -l
 >0: ( Seq ( Seq Char ) )~( Seq Char )
 
-::wc -[cmlw]
+::wc -[cmw]
 <1: ( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
 >0: ( Seq Char )
 

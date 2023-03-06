@@ -67,7 +67,7 @@ impl PipelineLauncher {
             Arc::new(
                 |mut node, _dst_type:_| {
                     let depth = node.depth;
-                    let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
+                    let editor = node.editor.clone().unwrap().get_view().unwrap().get().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                     let pty_editor = PTYListEditor::from_editor(
                         editor,
                         Some('|'),
@@ -86,7 +86,7 @@ impl PipelineLauncher {
 
                     let editor = Arc::new(RwLock::new(pipeline_launcher));
                     node.cmd = Some(editor.clone());
-                    node.editor = Some(editor.clone());
+                    node.editor = Some(r3vi::buffer::singleton::SingletonBuffer::new(Some(editor.clone() as Arc<dyn std::any::Any + Send + Sync>)).get_port());
                     Some(node)                
                 }
             )
@@ -228,8 +228,11 @@ impl PipelineLauncher {
         let types = self.types.read().unwrap();
         let mut last_stdout_type : Option<TypeLadder> = None;
 
+
+        let mut typestack = vec![];
+
         for (j, process_str) in strings.iter().enumerate() {
-            if process_str.len() > 0 { 
+            if process_str.len() > 0 {
                 if let (Some(last_stdout), Some(expected)) = (last_stdout_type, types.get_stdin_type( &process_str )) {
 
                     // todo
@@ -240,6 +243,10 @@ impl PipelineLauncher {
                             grid.insert(Point2::new(0 as i16, 1 as i16), make_label("found").with_style(TerminalStyle::bold(true)));
 
                             for (i,t) in last_stdout.0.iter().enumerate() {
+                                if i < x {
+                                    typestack.push(t.clone());
+                                }
+
                                 let tstr = ctx.read().unwrap().type_term_to_str( t );
                                 grid.insert(Point2::new(0, 2+i as i16), make_label(&tstr).with_fg_color(
                                     if i < x {
@@ -318,6 +325,13 @@ impl PipelineLauncher {
                 }
 
                 last_stdout_type = types.get_stdout_type( &process_str );
+                /*
+                if let Some(mut last_stdout_type) = last_stdout_type.as_mut() {
+                    while let Some(x) = typestack.pop() {
+                        last_stdout_type.0.insert(0, x);   
+                    }
+            }
+                */
             }
         }
 

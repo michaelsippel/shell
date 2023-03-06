@@ -41,10 +41,12 @@ pub async fn tui_repl(ctx: Arc<RwLock<Context>>) {
         }
     });
 
+    nested::type_system::editor::TypeTermEditor::init_ctx(&mut ctx.write().unwrap());
+    
     let process_list_editor =
         PTYListEditor::new(
             ctx.clone(),
-            (&ctx, "( Command )").into(),
+            (&ctx, "( TypeTerm )").into(),
             None,
             0
         );

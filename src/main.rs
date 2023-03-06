@@ -47,7 +47,7 @@ struct Cli {
 }
 
 #[async_std::main]
-async fn main() {
+async fn main() {    
     let cli = Cli::parse();
 
     // Type Context //

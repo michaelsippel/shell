@@ -50,7 +50,7 @@ impl ProcessLauncher {
             Arc::new(
                 |mut node, _dst_type:_| {
                     let depth = node.depth;
-                    let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
+                    let editor = node.editor.clone().unwrap().get_view().unwrap().get().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                     let pty_editor = PTYListEditor::from_editor(
                         editor,
                         None,
@@ -62,17 +62,16 @@ impl ProcessLauncher {
                     Some(node)                
                 }
             )
-        );
-        
+        );        
         ctx.add_node_ctor(
             "ProcessArg", Arc::new(
                 |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth: usize| {
                     let mut node = Context::make_node(
                         &ctx,
                         TypeTerm::Type {
-                            id: ctx.read().unwrap().get_typeid("List").unwrap(),
+                            id: ctx.read().unwrap().get_fun_typeid("List").unwrap(),
                             args: vec![
-                                TypeTerm::new(ctx.read().unwrap().get_typeid("Char").unwrap())
+                                TypeTerm::new(ctx.read().unwrap().get_typeid("Char").unwrap()).into()
                             ]
                         },
                         depth+1
@@ -85,7 +84,6 @@ impl ProcessLauncher {
             )
         );
 
-
         ctx.add_list_typename("Process".into());
         ctx.add_morphism(
             MorphismTypePattern {
@@ -95,7 +93,7 @@ impl ProcessLauncher {
             Arc::new(
                 |mut node, _dst_type:_| {
                     let depth = node.depth;
-                    let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
+                    let editor = node.editor.clone().unwrap().get_view().unwrap().get().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                     let pty_editor = PTYListEditor::from_editor(
                         editor,
                         Some(' '),
@@ -118,9 +116,9 @@ impl ProcessLauncher {
                     let mut node = Context::make_node(
                         &ctx,
                         TypeTerm::Type {
-                            id: ctx.read().unwrap().get_typeid("List").unwrap(),
+                            id: ctx.read().unwrap().get_fun_typeid("List").unwrap(),
                             args: vec![
-                                TypeTerm::new(ctx.read().unwrap().get_typeid("ProcessArg").unwrap())
+                                TypeTerm::new(ctx.read().unwrap().get_typeid("ProcessArg").unwrap()).into()
                             ]
                         },
                         depth+1

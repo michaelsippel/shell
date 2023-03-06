@@ -16,7 +16,7 @@ pub fn init_ctx(ctx: &mut Context) {
         Arc::new(
             |mut node, _dst_type:_| {
                 let depth = node.depth;
-                let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
+                let editor = node.editor.clone().unwrap().get_view().unwrap().get().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                 let pty_editor = PTYListEditor::from_editor(
                     editor,
                     None,
@@ -37,9 +37,9 @@ pub fn init_ctx(ctx: &mut Context) {
                 let mut node = Context::make_node(
                     &ctx,
                     TypeTerm::Type {
-                        id: ctx.read().unwrap().get_typeid("List").unwrap(),
+                        id: ctx.read().unwrap().get_fun_typeid("List").unwrap(),
                         args: vec![
-                            TypeTerm::new(ctx.read().unwrap().get_typeid("Char").unwrap())
+                            TypeTerm::new(ctx.read().unwrap().get_typeid("Char").unwrap()).into()
                         ]
                     },
                     depth+1
@@ -61,7 +61,7 @@ pub fn init_ctx(ctx: &mut Context) {
         Arc::new(
             |mut node, _dst_type:_| {
                 let depth = node.depth;
-                let editor = node.editor.clone().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
+                let editor = node.editor.clone().unwrap().get_view().unwrap().get().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
                 let pty_editor = PTYListEditor::from_editor(
                     editor,
                     Some('/'),
@@ -81,9 +81,9 @@ pub fn init_ctx(ctx: &mut Context) {
                 let mut node = Context::make_node(
                     &ctx,
                     TypeTerm::Type {
-                        id: ctx.read().unwrap().get_typeid("List").unwrap(),
+                        id: ctx.read().unwrap().get_fun_typeid("List").unwrap(),
                         args: vec![
-                            TypeTerm::new(ctx.read().unwrap().get_typeid("PathSegment").unwrap())
+                            TypeTerm::new(ctx.read().unwrap().get_typeid("PathSegment").unwrap()).into()
                         ]
                     },
                     depth+1
