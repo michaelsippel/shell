@@ -359,25 +359,46 @@ impl PipelineLauncher {
             if execs.len() > 1 {
                 let pipeline = subprocess::Pipeline::from_exec_iter(execs);
 
-                if let Ok(mut stdout) = pipeline.stream_stdout() {
-                    let max_size = cgmath::Vector2::new(80, 40);
+                match pipeline.stream_stdout() {
+                    Ok(mut stdout) => {
+                        let max_size = cgmath::Vector2::new(80, 40);
 
-                    let port = self.pty_port.inner();
+                        let port = self.pty_port.inner();
 
-                    async_std::task::spawn_blocking(move || {
-                        nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
-                    });
+                        async_std::task::spawn_blocking(move || {
+                            nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
+                        });
+                    }
+
+                    Err(err) => {
+                        self.diag_buf.push(
+                        nested::diagnostics::make_error(
+                            make_label(
+                                &format!("error spawning pipeline: {:?}", err)
+                            )
+                        ));
+                    }
                 }
             } else if execs.len() == 1 {
                 let e = execs[0].clone();
-                if let Ok(mut stdout) = e.stream_stdout() {
-                    let max_size = cgmath::Vector2::new(80, 40);
+                match e.stream_stdout() {
+                    Ok(mut stdout) => {
+                        let max_size = cgmath::Vector2::new(80, 40);
 
-                    let port = self.pty_port.inner();
+                        let port = self.pty_port.inner();
 
-                    async_std::task::spawn_blocking(move || {
-                        nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
-                    });
+                        async_std::task::spawn_blocking(move || {
+                            nested::terminal::ansi_parser::read_ansi_from(&mut stdout, max_size, port);
+                        });
+                    }
+                    Err(err) => {
+                        self.diag_buf.push(
+                            nested::diagnostics::make_error(
+                                make_label(
+                                    &format!("error spawning pipeline: {:?}", err)
+                                )
+                            ));
+                    }
                 }
             }
         }
