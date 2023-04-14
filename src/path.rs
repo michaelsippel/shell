@@ -15,16 +15,8 @@ pub fn init_ctx(ctx: &mut Context) {
         },
         Arc::new(
             |mut node, _dst_type:_| {
-                let depth = node.depth;
-                let editor = node.editor.clone().unwrap().get_view().unwrap().get().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
-                let pty_editor = PTYListEditor::from_editor(
-                    editor,
-                    None,
-                    depth+1
-                );
-
-                node.view = Some(pty_editor.pty_view(("","","")));
-                node.cmd = Some(Arc::new(RwLock::new(pty_editor)));
+                PTYListController::for_node( &mut node, None, None );
+                PTYListStyle::for_node( &mut node, ("","","") );
                 Some(node)
             }
         )
@@ -60,17 +52,9 @@ pub fn init_ctx(ctx: &mut Context) {
         },
         Arc::new(
             |mut node, _dst_type:_| {
-                let depth = node.depth;
-                let editor = node.editor.clone().unwrap().get_view().unwrap().get().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
-                let pty_editor = PTYListEditor::from_editor(
-                    editor,
-                    Some('/'),
-                    depth+1
-                );
-
-                node.view = Some(pty_editor.pty_view(("","/","")));
-                node.cmd = Some(Arc::new(RwLock::new(pty_editor)));
-                Some(node)                
+                PTYListController::for_node( &mut node, Some('/'), None );
+                PTYListStyle::for_node( &mut node, ("","/","") );
+                Some(node)
             }
         )
     );

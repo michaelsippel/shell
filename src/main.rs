@@ -20,7 +20,7 @@ use {
     },
     nested::{
         type_system::{Context, ReprTree},
-        editors::{list::{ListCursorMode, PTYListEditor}},
+        editors::{list::{ListCursorMode, PTYListController, PTYListStyle}},
         terminal::{make_label, Terminal, TerminalCompositor, TerminalEditor, TerminalEvent, TerminalStyle, TerminalProjections},
         tree::{TreeNav, TreeCursor},
         commander::ObjCommander

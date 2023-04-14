@@ -66,19 +66,11 @@ impl PipelineLauncher {
             },
             Arc::new(
                 |mut node, _dst_type:_| {
-                    let depth = node.depth;
-                    let editor = node.editor.clone().unwrap().get_view().unwrap().get().unwrap().downcast::<RwLock<ListEditor>>().unwrap();
-                    let pty_editor = PTYListEditor::from_editor(
-                        editor,
-                        Some('|'),
-                        depth
-                    );
-
-                    node.view = Some(pty_editor.pty_view((""," | ","")));
-                    node.cmd = Some(Arc::new(RwLock::new(pty_editor)));
+                    PTYListController::for_node( &mut node, Some('|'), None );
+                    PTYListStyle::for_node( &mut node, (""," | ","") );
 
                     let pipeline_launcher = crate::pipeline::PipelineLauncher::new(node.clone());
-                    
+
                     node.view = Some(pipeline_launcher.editor_view());
                     node.diag = Some(pipeline_launcher.diag_buf
                                      .get_port()
@@ -91,7 +83,6 @@ impl PipelineLauncher {
                 }
             )
         );
-
         ctx.add_node_ctor(
             "Pipeline",
             Arc::new(

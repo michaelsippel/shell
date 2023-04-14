@@ -8,7 +8,7 @@ use {
     },
     nested::{
         type_system::{Context, ReprTree},
-        editors::{list::{ListCursorMode, PTYListEditor}},
+        editors::{list::{ListCursorMode, ListEditor, PTYListController, PTYListStyle}},
         terminal::{make_label, Terminal, TerminalCompositor, TerminalEditor, TerminalEvent, TerminalStyle, TerminalProjections},
         tree::{TreeNav, TreeCursor},
         commander::ObjCommander
@@ -28,7 +28,9 @@ pub async fn tui_repl(ctx: Arc<RwLock<Context>>) {
 
     // Update Loop //
     let tp = term_port.clone();
+
     async_std::task::spawn({
+        let tp = term_port.clone();
         let portmutex = portmutex.clone();
         async move {
             loop {
@@ -36,24 +38,24 @@ pub async fn tui_repl(ctx: Arc<RwLock<Context>>) {
                     let _l = portmutex.write().unwrap();
                     tp.update();
                 }
-                async_std::task::sleep(std::time::Duration::from_millis(10)).await;
+                async_std::task::sleep(std::time::Duration::from_millis(500)).await;
             }
         }
     });
 
     nested::type_system::editor::TypeTermEditor::init_ctx(&mut ctx.write().unwrap());
-    
-    let process_list_editor =
-        PTYListEditor::new(
+
+    let mut process_list_editor =
+        ListEditor::new(
             ctx.clone(),
-            (&ctx, "( TypeTerm )").into(),
-            None,
-            0
+            (&ctx, "( Command )").into()
         );
-    
-    let ple_seg_view = process_list_editor.get_seg_seq_view();
-    let cursor_widget = process_list_editor.editor.read().unwrap().get_cursor_widget();
-    let mut node = process_list_editor.into_node();
+    let ple_seg_view = PTYListStyle::new( ("", "", ""), 0 ).get_seg_seq_view( &mut process_list_editor );
+
+    let cursor_widget = process_list_editor.get_cursor_widget();
+
+    let mut node = process_list_editor.into_node( 0 );
+    PTYListController::for_node( &mut node, Some('~'), None );
 
     let mut table = IndexBuffer::new();
 
@@ -151,6 +153,7 @@ pub async fn tui_repl(ctx: Arc<RwLock<Context>>) {
         });
 
     async_std::task::spawn(async move {
+        tp.update();
         loop {
             let ev = term.next_event().await;
             let _l = portmutex.write().unwrap();
@@ -231,6 +234,8 @@ pub async fn tui_repl(ctx: Arc<RwLock<Context>>) {
                     node.handle_terminal_event(&ev);
                 }
             }
+
+            tp.update();
         }
 
         drop(term);
