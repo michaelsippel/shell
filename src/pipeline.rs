@@ -151,7 +151,7 @@ impl PipelineLauncher {
     }
 
     pub fn pty_view(&self) -> OuterViewPort<dyn TerminalView> {
-        self.box_port.outer()
+        self.comp_port.outer()
     }
 
     pub fn editor_view(&self) -> OuterViewPort<dyn TerminalView> {
