@@ -36,6 +36,22 @@ pub fn init_os_ctx(parent: Arc<RwLock<Context>>) -> Arc<RwLock<Context>> {
     crate::process::ProcessLauncher::init_ctx(&mut ctx.write().unwrap());
     crate::pipeline::PipelineLauncher::init_ctx(&mut ctx.write().unwrap());
     crate::command::Command::init_ctx(&mut ctx.write().unwrap());
+
+    {
+        let mut c = ctx.write().unwrap();
+        c.add_list_typename("None".into());
+        c.add_list_typename("SepSeq".into());
+        c.add_list_typename("FileInfo".into());
+        c.add_list_typename("HumanizedDate".into());
+        c.add_list_typename("Ctime".into());
+        c.add_list_typename("Weekday".into());
+        c.add_list_typename("Month".into());
+        c.add_list_typename("LocaleShortWeekday".into());
+        c.add_list_typename("LocaleFullWeekday".into());
+        c.add_list_typename("LocaleShortMonth".into());
+        c.add_list_typename("LocaleFullMonth".into());
+    }
+    
     ctx
 }
 

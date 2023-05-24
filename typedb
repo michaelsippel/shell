@@ -1,38 +1,74 @@
-::wc -l
->0: ( Seq ( Seq Char ) )~( Seq Char )
+::cp\( .*\)*
+>0: ( None )
 
-::wc -[cmw]
+::date
+<1: ( Date )~( HumanizedDate )~( Seq Char )
+
+::date +%s
+<1: ( Date )~( TimeSinceEpoch )~( Duration Seconds )~( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
+
+::date +%S
+<1: ( Duration Seconds )~( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
+
+::wc \(-l\|--lines\)
+<1: ( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
+>0: ( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::wc \(-[cmw]\|--bytes\|--chars\|--words\)
 <1: ( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
 >0: ( Seq Char )
 
 ::seq [0-9]*
-<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
 
-::sort -n\(\| .*\)
->0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
-<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+::seq \(-s\|--separator\) : [0-9]*
+<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
 
-::sort\(\| .*\)
->0: ( Seq ( Seq Char ) )~( Seq Char )
-<1: ( Seq ( Seq Char ) )~( Seq Char )
+::sort -n\( .*\)*
+>0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::sort -M\( .*\)*
+>0: ( Seq Month )~( Seq LocaleShortMonth )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq Month )~( Seq LocaleShortMonth )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::sort\( .*\)*
+>0: ( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
 
 ::\(head\|tail\)\(\| .*\)
->0: ( Seq ( Seq Char ) )~( Seq Char )
-<1: ( Seq ( Seq Char ) )~( Seq Char )
+>0: ( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
 
-::ls\(\| .*\)
-<1: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+::cut -d: -f[0-9]*
+>0: ( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char ':' ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
 
-::find\(\| .*\)
-<1: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+::cut -d/ -f[0-9]*
+>0: ( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char '/' ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::ls\( .*\)* -l\( .*\)
+<1: ( Seq FileInfo )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::ls\( .*\)*
+<1: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char '/' ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
 
 ::xargs expr [0-9]* \(+\|-\|\*\|/\)
 >0: ( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
 <1: ( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
 
 ::xargs -n 1 expr [0-9]* \(+\|-\|\*\|/\)
->0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
-<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+>0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::xargs -n 1 expr [0-9]* \(+\|-\|\*\|/\)
+>0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::xargs \(\(-d :\|--delimiter=:\) -n 1\|-n 1 \(-d :\|--delimiter=:\)\) expr [0-9]* \(+\|-\|\*\|/\)
+>0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
+<1: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
 
 ::stat -c %[WXYZ] [a-z/]*
 <1: ( Date )~( TimeSinceEpoch )~( Duration Seconds )~( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
@@ -41,16 +77,55 @@
 <1: ( Date )~( ISO-8601 )~( Seq Char )
 
 ::xargs stat -c %[WXYZ]
->0: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( Seq Char ) )~( Seq Char )
-<1: ( Seq Date )~( Seq TimeSinceEpoch )~( Seq ( Duration Seconds ) )~( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )
+>0: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char '/' ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq Date )~( Seq TimeSinceEpoch )~( Seq ( Duration Seconds ) )~( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
 
 ::xargs stat -c %[wxyz]
->0: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( Seq Char ) )~( Seq Char )
-<1: ( Seq Date )~( Seq ISO-8601 )~( Seq ( Seq Char ) )
+>0: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char '/' ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq Date )~( Seq ISO-8601 )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
 
-::date +%s
-<1: ( Date )~( TimeSinceEpoch )~( Duration Seconds )~( ℕ )~( PosInt 10 BigEndian )~( Seq ( Digit 10 ) )~( Seq Char )
+::xargs -d : stat -c %[WXYZ]
+>0: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char '/' ) )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
+<1: ( Seq Date )~( Seq TimeSinceEpoch )~( Seq ( Duration Seconds ) )~( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::xargs -d : stat -c %[wxyz]
+>0: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char '/' ) )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
+<1: ( Seq Date )~( Seq ISO-8601 )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::xargs rm\( .*\)*
+>0: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char '/' ) )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
+
+::echo \($PATH\|"$PATH"\)
+<1: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char '/' ) )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
 
 ::rev
->0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
-<1: ( Seq ℕ )~( Seq ( PosInt 10 LittleEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( Seq Char )
+>0: ( Seq ℕ )~( Seq ( PosInt 10 BigEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+<1: ( Seq ℕ )~( Seq ( PosInt 10 LittleEndian ) )~( Seq ( Seq ( Digit 10 ) ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::find\( .*\)
+<1: ( Seq Path )~( Seq ( Seq PathSegment ) )~( Seq ( Seq ( Seq Char ) ) )~( Seq ( SepSeq Char '/' ) )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::find \-printf %\(A\|B\|T\)A\\n
+<1: ( Seq Weekday )~( Seq LocaleFullWeekday )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::find \-printf %\(A\|B\|T\)A:
+<1: ( Seq Weekday )~( Seq LocaleFullWeekday )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
+
+::find \(.*\|-printf %\(A\|B\|T\)b\\n\)
+<1: ( Seq Month )~( Seq LocaleShortMonth )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::find\( .*\)* \-printf %\(A\|B\|T\)b:\( .*\)*
+<1: ( Seq Month )~( Seq LocaleShortMonth )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
+
+::find\( .*\)* -printf %\(A\|B\|T\)B\\n( .*\)*
+<1: ( Seq Month )~( Seq LocaleFullMonth )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::find\( .*\)* -printf %\(A\|B\|T\)B:\( .*\)*
+<1: ( Seq Month )~( Seq LocaleFullMonth )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
+
+::find\( .*\)* -printf %[ABT]c\\n\( .*\)*
+<1: ( Seq Date )~( Seq Ctime )~( Seq ( Seq Char ) )~( SepSeq Char '\n' )~( Seq Char )
+
+::find\( .*\)* -printf %[ABT]c:\( .*\)*
+<1: ( Seq Date )~( Seq Ctime )~( Seq ( Seq Char ) )~( SepSeq Char ':' )~( Seq Char )
+
