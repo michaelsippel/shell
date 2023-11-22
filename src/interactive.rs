@@ -8,11 +8,15 @@ use {
     },
     nested::{
         type_system::{Context, ReprTree},
-        editors::{list::{ListCursorMode, ListEditor, PTYListController, PTYListStyle}},
+        editors::{list::{ListCursorMode, ListEditor, PTYListController, PTYListStyle, ListCmd}, typeterm::TypeTermEditor},
         terminal::{make_label, Terminal, TerminalCompositor, TerminalEditor, TerminalEvent, TerminalStyle, TerminalProjections},
         tree::{TreeNav, TreeCursor},
         commander::ObjCommander
     },
+    /* refactoring proposal
+     *  nested-vt100:{}
+     *  nested-terminal::{event_loop, display_loop}
+     */
     std::sync::{Arc, RwLock},
     termion::event::{Event, Key},
 };
@@ -43,19 +47,17 @@ pub async fn tui_repl(ctx: Arc<RwLock<Context>>) {
         }
     });
 
-    nested::type_system::editor::TypeTermEditor::init_ctx(&mut ctx.write().unwrap());
-
     let mut process_list_editor =
         ListEditor::new(
             ctx.clone(),
-            (&ctx, "( Command )").into()
+            Context::parse(&ctx, "Command")
         );
-    let ple_seg_view = PTYListStyle::new( ("", "", ""), 0 ).get_seg_seq_view( &mut process_list_editor );
+    let ple_seg_view = PTYListStyle::new( ("", "", "") ).get_seg_seq_view( &mut process_list_editor );
 
     let cursor_widget = process_list_editor.get_cursor_widget();
 
-    let mut node = process_list_editor.into_node( 0 );
-    PTYListController::for_node( &mut node, Some('~'), None );
+    let mut node = process_list_editor.into_node( SingletonBuffer::new(0).get_port() );
+    PTYListController::for_node( &mut node, None, None );
 
     let mut table = IndexBuffer::new();
 
@@ -174,64 +176,95 @@ pub async fn tui_repl(ctx: Arc<RwLock<Context>>) {
                         process_list_editor.nexd();
                     }
                     continue;
-            }
+             }
                 */
-            }
-*/
-            match ev {
-                TerminalEvent::Input(Event::Key(Key::Ctrl('d'))) => break,
-                TerminalEvent::Input(Event::Key(Key::Ctrl('l'))) => {
-                    node.goto(TreeCursor {
-                        leaf_mode: ListCursorMode::Insert,
-                        tree_addr: vec![0],
-                    });
-                    //process_list_editor.clear();
-                }
-                TerminalEvent::Input(Event::Key(Key::Left)) => {
-                    node.pxev();
-                }
-                TerminalEvent::Input(Event::Key(Key::Right)) => {
-                    node.nexd();
-                }
-                
-                TerminalEvent::Input(Event::Key(Key::Up)) => {
-                    node.up();
-                }
-                TerminalEvent::Input(Event::Key(Key::Down)) => {
-                    node.dn();
-                }
+        }
+             */
 
-                TerminalEvent::Input(Event::Key(Key::PageUp)) => {
-                    node.up();
-                    node.nexd();
-                }
-                TerminalEvent::Input(Event::Key(Key::PageDown)) => {
-                    node.pxev();
-                    node.dn();
-                    node.qnexd();
-                }
+            match node.get_cursor().leaf_mode {
+                ListCursorMode::Select => {
+                    match ev {
+                        // left hand
+                        TerminalEvent::Input(Event::Key(Key::Char('i'))) => { node.qpxev(); },
+                        TerminalEvent::Input(Event::Key(Key::Char('a'))) => { node.dn(); },
+                        TerminalEvent::Input(Event::Key(Key::Char('e'))) => { node.pxev(); },
+                        TerminalEvent::Input(Event::Key(Key::Char('l'))) => { node.up(); },
 
-                TerminalEvent::Input(Event::Key(Key::Home)) => {
-                    node.qpxev();
-                }
-                TerminalEvent::Input(Event::Key(Key::End)) => {
-                    node.qnexd();
-                }
-                TerminalEvent::Input(Event::Key(Key::Char('\t'))) => {
-                    node.toggle_leaf_mode();
-                }
-                TerminalEvent::Input(Event::Key(Key::Char(c))) => {
-                    let buf = SingletonBuffer::new(c);
+                        // right hand
+                        TerminalEvent::Input(Event::Key(Key::Char('n'))) => { node.nexd(); },
+                        TerminalEvent::Input(Event::Key(Key::Char('r'))) => {
+                            node.dn();
+                            let mut c = node.get_cursor();
+                            let d = c.tree_addr.len();
+                            c.tree_addr[ d - 1 ] = -1;
+                            node.goto(c);
+                        },
+                        TerminalEvent::Input(Event::Key(Key::Char('t'))) => { node.qnexd(); },
+                        TerminalEvent::Input(Event::Key(Key::Char('g'))) => { node.up(); },
 
-                    node.send_cmd_obj(
-                        ReprTree::new_leaf(
-                            ctx.read().unwrap().type_term_from_str("( Char )").unwrap(),
-                            AnyOuterViewPort::from(buf.get_port())
-                        )
-                    );
+                        TerminalEvent::Input(Event::Key(Key::Char('\t'))) => { node.toggle_leaf_mode(); }
+
+                        TerminalEvent::Input(Event::Key(Key::Char(c))) => {
+                            node.send_cmd_obj(
+                                ReprTree::from_char(&ctx, c)
+                            );
+                        }
+
+                       _ => {}
+                    }
                 }
-                ev => {                    
-                    node.handle_terminal_event(&ev);
+                ListCursorMode::Insert => {
+                    match ev {
+                        TerminalEvent::Input(Event::Key(Key::Ctrl('d'))) => break,
+
+                        // left hand
+                        TerminalEvent::Input(Event::Key(Key::Ctrl('i'))) => { node.qpxev(); },
+                        TerminalEvent::Input(Event::Key(Key::Ctrl('a'))) => { node.dn(); },
+                        TerminalEvent::Input(Event::Key(Key::Ctrl('e'))) => { node.pxev(); },
+                        TerminalEvent::Input(Event::Key(Key::Ctrl('l'))) => { node.up(); },
+
+                        // right hand
+                        TerminalEvent::Input(Event::Key(Key::Ctrl('n'))) => { node.nexd(); },
+                        TerminalEvent::Input(Event::Key(Key::Ctrl('r'))) => {
+                            node.pxev();
+                            node.dn();
+                            let mut c = node.get_cursor();
+                            let d = c.tree_addr.len();
+                            c.tree_addr[ d - 1 ] = -1;
+                            node.goto(c);
+                        },
+                        TerminalEvent::Input(Event::Key(Key::Ctrl('t'))) => { node.qnexd(); },
+                        TerminalEvent::Input(Event::Key(Key::Ctrl('g'))) => { node.up(); node.nexd(); },
+
+
+                        // default cross
+                        TerminalEvent::Input(Event::Key(Key::Left)) => { node.pxev(); }
+                        TerminalEvent::Input(Event::Key(Key::Right)) => { node.nexd(); }
+                        TerminalEvent::Input(Event::Key(Key::Up)) => { node.up(); }
+                        TerminalEvent::Input(Event::Key(Key::Down)) => { node.dn(); }
+                        TerminalEvent::Input(Event::Key(Key::PageUp)) => { node.up(); node.nexd(); }
+                        TerminalEvent::Input(Event::Key(Key::PageDown)) => { node.pxev(); node.dn(); node.qnexd(); }
+                        TerminalEvent::Input(Event::Key(Key::Home)) => { node.qpxev(); }
+                        TerminalEvent::Input(Event::Key(Key::End)) => { node.qnexd(); }
+
+                        TerminalEvent::Input(Event::Key(Key::Char('\t'))) => { node.toggle_leaf_mode(); }
+                        TerminalEvent::Input(Event::Key(Key::Backspace)) => {
+                            node.send_cmd_obj(ListCmd::DeletePxev.into_repr_tree(&ctx));
+                        },
+                        TerminalEvent::Input(Event::Key(Key::Delete)) => {
+                            node.send_cmd_obj(ListCmd::DeleteNexd.into_repr_tree(&ctx));
+                        }
+
+                        TerminalEvent::Input(Event::Key(Key::Char(c))) => {
+                            node.send_cmd_obj(
+                                ReprTree::from_char(&ctx, c)
+                            );
+                        }
+
+                        ev => {                    
+                            node.handle_terminal_event(&ev);
+                        }
+                    }
                 }
             }
 

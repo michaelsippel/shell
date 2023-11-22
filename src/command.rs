@@ -6,9 +6,10 @@ use {
             singleton::*,
             sequence::*,
         },
-        buffer::index_hashmap::*,
+        buffer::{singleton::*, index_hashmap::*},
         projection::decorate_sequence::Separate
     },
+    laddertypes::{TypeTerm},
     nested::{
         editors::{list::{ListEditor, ListCursorMode}, sum::SumEditor},
         terminal::{
@@ -16,7 +17,7 @@ use {
             widgets::ascii_box::AsciiBox, TerminalEvent, make_label
         },
         tree::{NestedNode, TreeNav, TreeCursor, TreeNavResult},
-        type_system::{Context, ReprTree, TypeTerm},
+        type_system::{Context, ReprTree},
         commander::ObjCommander,
         PtySegment
     },
@@ -64,7 +65,7 @@ impl Command {
         ctx.add_node_ctor(
             "Command",
             Arc::new(
-                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth: usize| {
+                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth| {
                     let node = Command::new(
                         ctx,
                         std::env::current_dir().unwrap()
@@ -84,21 +85,21 @@ impl Command {
     }
 
     pub fn new(ctx: Arc<RwLock<Context>>, cwd: String) -> Self {
-        let mut cwd_node = Context::make_node(&ctx, (&ctx, "( Path )").into(), 2).unwrap();
+        let mut cwd_node = Context::make_node(&ctx, Context::parse(&ctx, "Path"), SingletonBuffer::new(2).get_port()).unwrap();
 
         cwd_node.goto(TreeCursor::home());
         for c in cwd.chars() {
             let buf = r3vi::buffer::singleton::SingletonBuffer::new(c);
 
             cwd_node.send_cmd_obj(
-                ReprTree::new_leaf((&ctx, "( Char )"), AnyOuterViewPort::from(buf.get_port()))
+                ReprTree::new_leaf(Context::parse(&ctx, "Char"), AnyOuterViewPort::from(buf.get_port()))
             ); 
         }
         cwd_node.goto(TreeCursor::none());
 
         let mut grid = IndexBuffer::new();
-        let mut incubator_node = Context::make_node(&ctx, (&ctx, "( Pipeline )").into(), 2).unwrap();
-        let mut path_node = Context::make_node(&ctx, (&ctx, "( Path )").into(), 2).unwrap();
+        let mut incubator_node = Context::make_node(&ctx, Context::parse(&ctx, "Pipeline"), SingletonBuffer::new(2).get_port()).unwrap();
+        let mut path_node = Context::make_node(&ctx, Context::parse(&ctx, "Path"), SingletonBuffer::new(2).get_port()).unwrap();
 
         let mut sum_editor = SumEditor::new(
             vec![
@@ -155,7 +156,7 @@ impl Command {
 
         let cd_path = self.cwd_node.get_data_view::<dyn SequenceView<Item = NestedNode>>(
             vec![
-                "( List PathSegment )"
+                "<List PathSegment>"
             ].into_iter()
         ).unwrap();
 
@@ -163,7 +164,7 @@ impl Command {
             let mut node = segment.clone();
             node.goto(TreeCursor::none());
 
-            let segment_view = node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["( List Char )"].into_iter());
+            let segment_view = node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["<List Char>"].into_iter());
 
             for k in 0..segment_view.len().unwrap_or(0) {
                 let char_node = segment_view.get(&k).unwrap();
@@ -186,7 +187,7 @@ impl ObjCommander for Command {
         let cmd_type = cmd_obj.get_type().clone();
 
         let char_value =
-            if cmd_type == (&self.ctx, "( Char )").into() {
+            if cmd_type == Context::parse(&self.ctx, "Char") {
                 if let Some(cmd_view) = cmd_obj.get_view::<dyn SingletonView<Item = char>>() {
                     Some(cmd_view.get())
                 } else {
@@ -197,7 +198,7 @@ impl ObjCommander for Command {
             };
 
         let term_event_value =
-            if cmd_type == (&self.ctx, "( TerminalEvent )").into() {
+            if cmd_type == Context::parse(&self.ctx, "TerminalEvent") {
                 if let Some(cmd_view) = cmd_obj.get_view::<dyn SingletonView<Item = TerminalEvent>>() {
                     Some(cmd_view.get())
                 } else {
@@ -293,7 +294,7 @@ impl ObjCommander for Command {
 
                                 let cd_path = path.get_data_view::<dyn SequenceView<Item = NestedNode>>(
                                     vec![
-                                        "( List PathSegment )"
+                                        "<List PathSegment>"
                                     ].into_iter()
                                 ).unwrap();
 
@@ -303,7 +304,7 @@ impl ObjCommander for Command {
                                     let mut node = segment.clone();
                                     node.goto(TreeCursor::none());
 
-                                    let node_view = node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["( List Char )"].into_iter());
+                                    let node_view = node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["<List Char>"].into_iter());
 
                                     let mut arg = String::new();
                                     for k in 0..node_view.len().unwrap_or(0) {
@@ -321,7 +322,7 @@ impl ObjCommander for Command {
                                             let len = cwd_edit.data.len();
                                             cwd_edit.data.remove(len-1);
                                         } else {
-                                            cwd_edit.data.push(node);
+                                            cwd_edit.data.push(Arc::new(RwLock::new(node)));
                                         }
                                     }
 
@@ -330,7 +331,7 @@ impl ObjCommander for Command {
 
                                 std::env::set_current_dir(std::path::Path::new(&cd_path_str));
                                 
-                                se.editors[1] = Context::make_node(&self.ctx, (&self.ctx, "( Path )").into(), 2).unwrap();
+                                se.editors[1] = Context::make_node(&self.ctx, Context::parse(&self.ctx, "Path"), SingletonBuffer::new(2).get_port()).unwrap();
 
                                 let pipeline_editor = se.editors[0].get_edit::<PipelineLauncher>().unwrap();
                                 pipeline_editor.write().unwrap().cwd = Some(self.get_cwd_string());
@@ -366,7 +367,7 @@ impl ObjCommander for Command {
                         p.send_cmd_obj(obj);
 
                         if p.editor.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec![
-                            "( List Process )"
+                            "<List Process>"
                         ].into_iter())
                             .unwrap()
                             .len() == Some(0) {

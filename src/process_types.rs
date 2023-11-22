@@ -1,8 +1,7 @@
 use {
+    laddertypes::{TypeTerm},
     nested::{
-        type_system::{
-            Context, TypeLadder
-        }
+        type_system::{Context}
     },
 
     std::{
@@ -72,7 +71,7 @@ impl ProcessTypes {
         }
     }
 
-    pub fn get_type(&self, cmd: &Vec<String>, item: &str) -> Option<TypeLadder> {
+    pub fn get_type(&self, cmd: &Vec<String>, item: &str) -> Option<TypeTerm> {
         let db = String::from(env!("CARGO_MANIFEST_DIR")) + "/typedb";
         let gt = String::from(env!("CARGO_MANIFEST_DIR")) + "/gettype.sh";
         let stdout_typeladder_str = std::process::Command::new(gt)
@@ -85,29 +84,25 @@ impl ProcessTypes {
             .stdout;
 
         let stdout_typeladder_str = String::from_utf8(stdout_typeladder_str).ok()?;
+/*
+        let editor = TypeTermEditor::new();
 
-        let mut typeladder = TypeLadder(vec![]);
-
-        if stdout_typeladder_str.len() > 0 {
-            for typestr in stdout_typeladder_str.split('~') {
-                typeladder.0.push((&self.ctx, typestr).into());
-            }
-
-            if typeladder.0.len() > 0 {
-                Some(typeladder)
-            } else {
-                None
-            }
-        } else {
-            None
+        editor.goto(TreeCursor::home())
+        for c in stdout_typeladder_str.iter() {
+            editor.send_cmd_obj(ReprTree::from_char( &ctx, c ));
         }
+
+        let typeterm = editor.get_typeterm();
+*/
+        let typeterm = TypeTerm::Ladder(vec![]);
+        Some(typeterm)
     }
 
-    pub fn get_stdin_type(&self, cmd: &Vec<String>) -> Option<TypeLadder> {
+    pub fn get_stdin_type(&self, cmd: &Vec<String>) -> Option<TypeTerm> {
         self.get_type(cmd, ">0")
     }
     
-    pub fn get_stdout_type(&self, cmd: &Vec<String>) -> Option<TypeLadder> {
+    pub fn get_stdout_type(&self, cmd: &Vec<String>) -> Option<TypeTerm> {
         self.get_type(cmd, "<1")
     }
 }

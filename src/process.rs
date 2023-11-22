@@ -7,6 +7,7 @@ use {
             sequence::*,
         }
     },
+    laddertypes::{TypeTerm},
     nested::{
         editors::{
             list::{ListCursorMode, ListEditor, PTYListController, PTYListStyle}
@@ -17,7 +18,7 @@ use {
             widgets::ascii_box::AsciiBox
         },
         tree::{TreeCursor, TreeNav, NestedNode, TreeNavResult},
-        type_system::{Context, TypeTerm, MorphismTypePattern}
+        type_system::{Context, MorphismTypePattern}
     },
     std::sync::Arc,
     std::sync::RwLock,
@@ -57,16 +58,11 @@ impl ProcessLauncher {
         );        
         ctx.add_node_ctor(
             "ProcessArg", Arc::new(
-                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth: usize| {
+                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth| {
                     let mut node = Context::make_node(
                         &ctx,
-                        TypeTerm::Type {
-                            id: ctx.read().unwrap().get_fun_typeid("List").unwrap(),
-                            args: vec![
-                                TypeTerm::new(ctx.read().unwrap().get_typeid("Char").unwrap()).into()
-                            ]
-                        },
-                        depth+1
+                        Context::parse(&ctx, "<List Char>"),
+                        depth
                     ).unwrap();
 
                     node = node.morph(dst_typ);
@@ -96,16 +92,11 @@ impl ProcessLauncher {
         ctx.add_node_ctor(
             "Process",
             Arc::new(
-                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth: usize| {
+                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth| {
                     let mut node = Context::make_node(
                         &ctx,
-                        TypeTerm::Type {
-                            id: ctx.read().unwrap().get_fun_typeid("List").unwrap(),
-                            args: vec![
-                                TypeTerm::new(ctx.read().unwrap().get_typeid("ProcessArg").unwrap()).into()
-                            ]
-                        },
-                        depth+1
+                        Context::parse(&ctx, "<List ProcessArg>"),
+                        depth
                     ).unwrap();
 
                     node = node.morph(dst_typ);
@@ -153,28 +144,29 @@ impl ProcessLauncher {
     }
 
     pub fn launch_pty(&mut self) {
-        let ctx = self.cmd_editor.ctx.clone().unwrap();
+        let ctx = self.cmd_editor.ctx.clone();//.read().unwrap().clone().unwrap();
 
         let mut strings = Vec::<String>::new();
 
-        if let Some(data) = self.cmd_editor.data.clone() {
-            let v = data.read().unwrap()
-                .descend((&ctx, "( List ProcessArg )"))
-                .unwrap()
-                .read().unwrap()
-                .get_view::<dyn SequenceView<Item = NestedNode>>();
+        let data = self.cmd_editor.data.clone();
+
+        let v = data.read().unwrap()
+            .descend(Context::parse(&ctx, "<List ProcessArg>"))
+            .unwrap()
+            .read().unwrap()
+            .get_view::<dyn SequenceView<Item = NestedNode>>();
 
             for i in 0..v.len().unwrap_or(0) {
-                if let Some(arg_data) = v
+                let arg_data = v
                     .get(&i)
                     .unwrap()
                     .data
-                    .clone()
-                {
+                    .clone();
+
                     let arg_view = arg_data
                         .read()
                         .unwrap()
-                        .descend((&ctx, "( List Char )"))
+                        .descend(Context::parse(&ctx, "<List Char>"))
                         .unwrap()
                         .read().unwrap()
                         .get_view::<dyn SequenceView<Item = NestedNode>>()
@@ -182,15 +174,11 @@ impl ProcessLauncher {
 
                     let arg = arg_view.iter().filter_map(
                             |node| {
-                                if let Some(c_data) = node.data.clone() {
-                                    if let Some(c_view) = c_data
-                                        .read().unwrap()
-                                        .get_view::<dyn SingletonView<Item = Option<char>>>()
-                                    {
-                                        c_view.get()
-                                    } else {
-                                        None
-                                    }
+                                if let Some(c_view) = node.data
+                                    .read().unwrap()
+                                    .get_view::<dyn SingletonView<Item = Option<char>>>()
+                                {
+                                    c_view.get()
                                 } else {
                                     None
                                 }
@@ -198,9 +186,7 @@ impl ProcessLauncher {
                     ).collect::<String>();
 
                     strings.push(arg);
-                }
-            }            
-        }
+            }
 
         if strings.len() > 0 {
             // Spawn a shell into the pty
@@ -245,13 +231,13 @@ impl ObjCommander for ProcessLauncher {
         }
 
 
-        let ctx = self.cmd_editor.ctx.clone().unwrap();
+        let ctx = self.cmd_editor.ctx.clone();
         let ctx = ctx.read().unwrap();
 
         let co = cmd_obj.read().unwrap();
         let cmd_type = co.get_type().clone();
-        let term_event_type = ctx.type_term_from_str("( TerminalEvent )").unwrap();
-        let char_type = ctx.type_term_from_str("( Char )").unwrap();
+        let term_event_type = ctx.type_term_from_str("TerminalEvent").unwrap();
+        let char_type = ctx.type_term_from_str("Char").unwrap();
 
         if cmd_type == term_event_type {
             if let Some(te_view) = co.get_view::<dyn SingletonView<Item = TerminalEvent>>() {
@@ -324,4 +310,5 @@ impl ObjCommander for ProcessLauncher {
         }
     }
 }
+
 

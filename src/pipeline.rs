@@ -11,6 +11,7 @@ use {
             index_hashmap::*
         }
     },
+    laddertypes::{TypeTerm},
     nested::{
         terminal::{
             TerminalAtom, TerminalStyle,
@@ -21,7 +22,7 @@ use {
         },
         tree::{NestedNode, TreeNavResult},
         editors::list::*,
-        type_system::{Context, MorphismType, MorphismTypePattern, TypeTerm, TypeLadder}
+        type_system::{Context, MorphismType, MorphismTypePattern}
     },
     std::sync::Arc,
     std::sync::RwLock,
@@ -69,6 +70,7 @@ impl PipelineLauncher {
                     PTYListController::for_node( &mut node, Some('|'), None );
                     PTYListStyle::for_node( &mut node, (""," | ","") );
 
+                    /*
                     let pipeline_launcher = crate::pipeline::PipelineLauncher::new(node.clone());
 
                     node.view = Some(pipeline_launcher.editor_view());
@@ -77,8 +79,11 @@ impl PipelineLauncher {
                                      .to_sequence());
 
                     let editor = Arc::new(RwLock::new(pipeline_launcher));
-                    node.cmd = Some(editor.clone());
-                    node.editor = Some(r3vi::buffer::singleton::SingletonBuffer::new(Some(editor.clone() as Arc<dyn std::any::Any + Send + Sync>)).get_port());
+                    node.cmd.set(Some(editor.clone() as Arc<RwLock<dyn ObjCommander + Send + Sync>>));
+                    node.editor.set(Some(editor.clone() as Arc<dyn std::any::Any + Send + Sync>));
+
+                    */
+                    
                     Some(node)                
                 }
             )
@@ -86,11 +91,11 @@ impl PipelineLauncher {
         ctx.add_node_ctor(
             "Pipeline",
             Arc::new(
-                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth: usize| {
+                |ctx: Arc<RwLock<Context>>, dst_typ: TypeTerm, depth| {
                     let mut node = Context::make_node(
                         &ctx,
-                        (&ctx, "( List Process )").into(),
-                        depth+1
+                        Context::parse(&ctx, "<List Process>"),
+                        depth
                     ).unwrap();
 
                     node = node.morph(dst_typ);
@@ -124,7 +129,7 @@ impl PipelineLauncher {
                 .map_item(|_idx, x| x.add_style_back(TerminalStyle::fg_color((220, 220, 0)))),
         );
 
-        let ctx = editor.ctx.clone().unwrap();
+        let ctx = editor.ctx.clone();
 
         PipelineLauncher {
             editor,
@@ -163,21 +168,21 @@ impl PipelineLauncher {
     }
 
     pub fn get_strings(&self) -> Vec<Vec<String>> {
-        let ctx = self.editor.ctx.clone().unwrap();
+        let ctx = self.editor.ctx.clone();
 
         let mut pipeline_strings = Vec::<Vec<String>>::new();
 
-        let pipeline_view = self.editor.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["( List Process )"].into_iter());
+        let pipeline_view = self.editor.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["<List Process>"].into_iter());
 
         for i in 0..pipeline_view.len().unwrap_or(0) {
             let process_node = pipeline_view.get(&i).unwrap();
             let mut process_strings = Vec::<String>::new();
 
-            let process_view = process_node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["( List ProcessArg )"].into_iter());
+            let process_view = process_node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["<List ProcessArg>"].into_iter());
 
             for j in 0..process_view.len().unwrap_or(0) {
                 let arg_node = process_view.get(&j).unwrap();
-                let arg_view = arg_node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["( List Char )"].into_iter());
+                let arg_view = arg_node.get_data_view::<dyn SequenceView<Item = NestedNode>>(vec!["<List Char>"].into_iter());
                 
                 let mut arg = String::new();
                 for k in 0..arg_view.len().unwrap_or(0) {
@@ -211,14 +216,13 @@ impl PipelineLauncher {
             return false;
         }
 
-        let ctx = self.editor.ctx.clone().unwrap();
+        let ctx = self.editor.ctx.clone();
 
         let types = self.types.read().unwrap();
-        let mut last_stdout_type : Option<TypeLadder> = None;
+        let mut last_stdout_type : Option<TypeTerm> = None;
 
         let types = self.types.read().unwrap();
-        let mut last_stdout_type : Option<TypeLadder> = None;
-
+        let mut last_stdout_type : Option<TypeTerm> = None;
 
         let mut typestack = vec![];
 
@@ -227,13 +231,16 @@ impl PipelineLauncher {
                 if let (Some(last_stdout), Some(expected)) = (last_stdout_type, types.get_stdin_type( &process_str )) {
 
                     // todo
-                    match last_stdout.is_matching_repr(&expected) {
+                    match last_stdout.is_syntactic_subtype_of(&expected) {
                         Ok(x) => {
                             let mut grid = IndexBuffer::new();
                             grid.insert(Point2::new(0 as i16, 0 as i16), make_label("matching types. ").with_style(TerminalStyle::bold(true)));
                             grid.insert(Point2::new(0 as i16, 1 as i16), make_label("found").with_style(TerminalStyle::bold(true)));
 
-                            for (i,t) in last_stdout.0.iter().enumerate() {
+                            let last_stdout_lnf = last_stdout.clone().get_lnf_vec();
+                            let expected_lnf = expected.clone().get_lnf_vec();
+
+                            for (i,t) in last_stdout_lnf.iter().enumerate() {
                                 if i < x {
                                     typestack.push(t.clone());
                                 }
@@ -251,7 +258,7 @@ impl PipelineLauncher {
                             grid.insert(Point2::new(2, 1), make_label("expected").with_style(TerminalStyle::bold(true)));
                             grid.insert(Point2::new(1, 2 as i16 + x as i16), make_label("<===>").map_item(|x,a| a.add_style_back(TerminalStyle::fg_color((50,200,50)))));
 
-                            for (i,t) in expected.0.iter().enumerate() {
+                            for (i,t) in expected_lnf.iter().enumerate() {
                                 let tstr = ctx.read().unwrap().type_term_to_str( t );
                                 grid.insert(Point2::new(2, 2 as i16 + x as i16 +i as i16), make_label(&tstr).with_fg_color((160,160,20)));
                             }
@@ -264,31 +271,35 @@ impl PipelineLauncher {
                                 msg
                             });
                         }
-                        Err(x) => {
-
+                        Err((first_match, first_mismatch)) => {
+/*
                             let (first_match, first_mismatch) = match x {
                                 Some((first_match, first_mismatch)) => {
                                     (Some(first_match), Some(first_mismatch))
                                 }
                                 None => (None, None)
                             };
-
+*/
                             let mut grid = IndexBuffer::new();
                             grid.insert(Point2::new(0 as i16, 0 as i16), make_label("type error. ").with_style(TerminalStyle::bold(true)));
                             grid.insert(Point2::new(0 as i16, 1 as i16), make_label("found").with_style(TerminalStyle::bold(true)));
 
-                            for (i,t) in last_stdout.0.iter().enumerate() {
+                            let last_stdout_lnf = last_stdout.clone().get_lnf_vec();
+                            let expected_lnf = expected.clone().get_lnf_vec();
+
+                            
+                            for (i,t) in last_stdout_lnf.iter().enumerate() {
                                 let tstr = ctx.read().unwrap().type_term_to_str( t );
                                 grid.insert(Point2::new(0, 2+i as i16), make_label(&tstr).with_fg_color((160,160,20)));
                             }
 
                             grid.insert(Point2::new(2, 1), make_label("expected").with_style(TerminalStyle::bold(true)));
 
-                            grid.insert(Point2::new(1, 2 as i16 + first_match.unwrap_or(0) as i16 + first_mismatch.unwrap_or(0) as i16), make_label("<=!=>").with_fg_color((200,50,50)));
+                            grid.insert(Point2::new(1, 2 as i16 + first_match as i16 + first_mismatch as i16), make_label("<=!=>").with_fg_color((200,50,50)));
 
-                            for (i,t) in expected.0.iter().enumerate() {
+                            for (i,t) in expected_lnf.iter().enumerate() {
                                 let tstr = ctx.read().unwrap().type_term_to_str( t );
-                                grid.insert(Point2::new(2, 2 as i16 + first_match.unwrap_or(0) as i16 + i as i16), make_label(&tstr).with_fg_color((160,160,20)));
+                                grid.insert(Point2::new(2, 2 as i16 + first_match as i16 + i as i16), make_label(&tstr).with_fg_color((160,160,20)));
                             }
 
                             self.diag_buf.push({
@@ -299,9 +310,6 @@ impl PipelineLauncher {
                                 msg
                             });                            
 
-                            return false;
-                        }
-                        Err(None) => {
                             return false;
                         }
                     }
@@ -418,13 +426,13 @@ use nested::commander::ObjCommander;
 impl ObjCommander for PipelineLauncher {
     fn send_cmd_obj(&mut self, cmd_obj: Arc<RwLock<ReprTree>>) -> TreeNavResult {
 
-        let ctx = self.editor.ctx.clone().unwrap();
+        let ctx = self.editor.ctx.clone();
         let ctx = ctx.read().unwrap();
 
         let co = cmd_obj.read().unwrap();
         let cmd_type = co.get_type().clone();
-        let _term_event_type = ctx.type_term_from_str("( TerminalEvent )").unwrap();
-        let char_type = ctx.type_term_from_str("( Char )").unwrap();
+        let _term_event_type = ctx.type_term_from_str("TerminalEvent").unwrap();
+        let char_type = ctx.type_term_from_str("Char").unwrap();
 
         if cmd_type == char_type {
             if let Some(cmd_view) = co.get_view::<dyn SingletonView<Item = char>>() {

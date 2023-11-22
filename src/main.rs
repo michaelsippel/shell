@@ -33,6 +33,7 @@ use {
 pub fn init_os_ctx(parent: Arc<RwLock<Context>>) -> Arc<RwLock<Context>> {
     let ctx = Arc::new(RwLock::new(Context::with_parent(Some(parent))));
     crate::path::init_ctx(&mut ctx.write().unwrap());
+
     crate::process::ProcessLauncher::init_ctx(&mut ctx.write().unwrap());
     crate::pipeline::PipelineLauncher::init_ctx(&mut ctx.write().unwrap());
     crate::command::Command::init_ctx(&mut ctx.write().unwrap());
@@ -67,20 +68,17 @@ async fn main() {
     let cli = Cli::parse();
 
     // Type Context //
-    let ctx = Arc::new(RwLock::new(Context::new()));
-    let ctx = nested::type_system::init_mem_ctx(ctx);
-    let ctx = nested::type_system::init_editor_ctx(ctx);
-    let ctx = nested::type_system::init_math_ctx(ctx);
+    let ctx = Arc::new(RwLock::new(Context::default()));
     let ctx = init_os_ctx(ctx);
 
     if let Some(check_expr) = cli.check_expr.as_deref() {
-        let mut node = Context::make_node(&ctx, (&ctx, "( Pipeline )").into(), 0).unwrap();
+        let mut node = Context::make_node(&ctx, Context::parse(&ctx, "Pipeline"), SingletonBuffer::new(0).get_port()).unwrap();
         
         node.goto(TreeCursor::home());
         for c in check_expr.chars() {
             node.send_cmd_obj(
                 ReprTree::new_leaf(
-                    (&ctx, "( Char )"),
+                    Context::parse(&ctx, "Char"),
                     AnyOuterViewPort::from(SingletonBuffer::new(c).get_port())
                 )
             );
